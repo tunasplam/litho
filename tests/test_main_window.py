@@ -1,3 +1,6 @@
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QPixmap
+
 from litho.main_window import MainWindow
 
 
@@ -62,3 +65,57 @@ def test_default_property_values(qtbot):
     assert window.zoom_label.text() == "100%"
     assert window.size_spin.value() == 14
     assert window.opacity_spin.value() == 100
+
+
+def test_central_widget_is_the_canvas_view(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.centralWidget() is window.view
+
+
+def test_zoom_in_action_updates_the_zoom_label(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_zoom_in.trigger()
+
+    assert window.zoom_label.text() == "125%"
+
+
+def test_fit_action_without_an_image_does_not_raise(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_fit.trigger()  # should be a no-op, not raise
+
+
+def test_open_image_from_path_loads_a_valid_image(qtbot, tmp_path):
+    image_path = tmp_path / "sample.png"
+    QPixmap(120, 80).save(str(image_path))
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.open_image_from_path(str(image_path)) is True
+    assert window.scene.has_image
+    assert window.scene.image_size() == QSize(120, 80)
+
+
+def test_open_image_from_path_rejects_a_missing_file(qtbot, tmp_path):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.open_image_from_path(str(tmp_path / "missing.png")) is False
+    assert not window.scene.has_image
+
+
+def test_constructing_with_initial_image_loads_it(qtbot, tmp_path):
+    image_path = tmp_path / "sample.png"
+    QPixmap(64, 64).save(str(image_path))
+
+    window = MainWindow(initial_image=str(image_path))
+    qtbot.addWidget(window)
+
+    assert window.scene.has_image
+    assert window.scene.image_size() == QSize(64, 64)

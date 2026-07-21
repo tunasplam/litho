@@ -7,9 +7,10 @@ about getting the window shell and toolbar layout right.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QLabel,
     QMainWindow,
     QPushButton,
@@ -19,10 +20,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from litho.canvas.scene import CanvasScene
+from litho.canvas.view import CanvasView
+
 WINDOW_TITLE = "Litho"
 DEFAULT_WINDOW_SIZE = (1200, 800)
 
 EXPORT_FORMATS = ["PNG", "JPG", "BMP"]
+
+# Temporary, pending io.py: Qt's own image plugins are enough to get
+# something on screen while the canvas is being built.
+IMAGE_FILE_FILTER = "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)"
 
 # Placeholder colors until a real color picker exists.
 DEFAULT_STROKE_COLOR = "#8fb8ff"
@@ -30,14 +38,18 @@ DEFAULT_FILL_COLOR = "#00000000"  # transparent
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, initial_image: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.resize(*DEFAULT_WINDOW_SIZE)
 
         self._build_toolbar_row1()
         self._build_toolbar_row2()
-        self._build_central_placeholder()
+        self._build_canvas()
+        self._connect_canvas_actions()
+
+        if initial_image:
+            self.open_image_from_path(initial_image)
 
     # ---------------------------------------------------------------
     # Row 1: file / edit / zoom
@@ -124,15 +136,39 @@ class MainWindow(QMainWindow):
         return action
 
     # ---------------------------------------------------------------
-    # Central widget (temporary — replaced by canvas/view.py next)
+    # Canvas
     # ---------------------------------------------------------------
-    def _build_central_placeholder(self) -> None:
-        placeholder = QLabel("Canvas — coming next")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setStyleSheet(
-            "border: 1px dashed palette(mid); color: palette(mid); margin: 24px;"
-        )
-        self.setCentralWidget(placeholder)
+    def _build_canvas(self) -> None:
+        self.scene = CanvasScene()
+        self.view = CanvasView(self.scene)
+        self.setCentralWidget(self.view)
+
+    def _connect_canvas_actions(self) -> None:
+        self.action_open.triggered.connect(self._on_open)
+        self.action_zoom_in.triggered.connect(self.view.zoom_in)
+        self.action_zoom_out.triggered.connect(self.view.zoom_out)
+        self.action_fit.triggered.connect(self.view.fit_to_window)
+        self.view.zoom_changed.connect(self._on_zoom_changed)
+
+    def _on_open(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Open image", "", IMAGE_FILE_FILTER)
+        if not path:
+            return
+        self.open_image_from_path(path)
+
+    def open_image_from_path(self, path: str) -> bool:
+        """Load an image into the canvas. Used by both the Open action and
+        the `litho <path>` command-line form. Returns whether it worked.
+        """
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            return False
+        self.scene.set_image(pixmap)
+        self.view.fit_to_window()
+        return True
+
+    def _on_zoom_changed(self, zoom: float) -> None:
+        self.zoom_label.setText(f"{round(zoom * 100)}%")
 
     # ---------------------------------------------------------------
     def _new_toolbar(self, name: str) -> QToolBar:

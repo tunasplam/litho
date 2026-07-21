@@ -6,10 +6,13 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-21` — package skeleton and `main_window.py` are up: a window shell
-with both toolbars laid out (text-only actions, no icons yet) and a
-placeholder central widget. No canvas, tools, or file I/O yet. Next step:
-`canvas/view.py` and `canvas/scene.py`.
+`2026-07-21` — canvas is up: `CanvasScene` holds a background image,
+`CanvasView` handles zoom in/out/fit, both wired into `main_window.py`
+along with a minimal Open action so the canvas can actually be exercised
+(real open/save/format-conversion still belongs to `io.py`, not started).
+`litho <path>` on the command line now opens straight to an image via
+`litho/__main__.py`'s `argparse` handling. No drawing tools or annotation
+items yet. Next step: `canvas/items.py` and `tools/select.py`.
 
 ---
 
@@ -172,8 +175,8 @@ litho`, and committed on its own before moving to the next.
 | Project scaffold (`uv init`) | Done | Flat `main.py`, now a thin shim into `litho.__main__`. |
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
-| `canvas/view.py` + `canvas/scene.py` | Not started | Next up — replaces the central placeholder label. |
-| `canvas/items.py` | Not started | |
+| `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
+| `canvas/items.py` | Not started | Next up. |
 | `tools/select.py` | Not started | |
 | `tools/polygon.py` | Not started | |
 | `tools/line.py` | Not started | |
@@ -183,6 +186,7 @@ litho`, and committed on its own before moving to the next.
 | `commands.py` (undo/redo) | Not started | |
 | `io.py` (open/save/convert) | Not started | |
 | `icons.py` | Not started | |
+| CLI image argument (`litho <path>`) | Done | `litho/__main__.py:parse_args`; `MainWindow(initial_image=...)` and `open_image_from_path()` shared with the Open action. |
 | Test scaffold (`conftest.py`, fixtures) | Partial | `test_main_window.py` in place, using pytest-qt's built-in `qtbot`/`qapp` fixtures directly — no hand-rolled `conftest.py` needed yet. Will add one once tests need shared fixtures (e.g. sample images for `io.py`). |
 | Packaging (PyInstaller/Nuitka) | Not started | Deferred until the app works end to end. |
 
@@ -214,6 +218,25 @@ litho`, and committed on its own before moving to the next.
 - **2026-07-21** — Tests use pytest-qt's built-in `qtbot`/`qapp` fixtures
   directly; no custom `conftest.py` yet. Run headless with
   `QT_QPA_PLATFORM=offscreen`.
+- **2026-07-21** — `main_window.py`'s Open action loads images directly via
+  `QFileDialog` + `QPixmap` rather than waiting for `io.py`. This is
+  temporary scaffolding to make the canvas testable now; `io.py` will take
+  over open/save/format-conversion and this call site gets swapped over
+  then.
+- **2026-07-21** — Fixed a real GC bug in `CanvasView`: `QGraphicsView`
+  does not take Python-side ownership of the scene passed to its
+  constructor, so without an explicit `self._scene = scene` reference,
+  PySide6 can garbage-collect the scene out from under the view once the
+  caller's own reference goes out of scope. `main_window.py` happened to
+  avoid this by keeping `self.scene` around, but it's now fixed at the
+  source in `CanvasView` itself so nothing else can hit it.
+- **2026-07-21** — Added `litho <path>` CLI support via `argparse` in
+  `litho/__main__.py`. Image-loading logic was factored out of `_on_open`
+  into `MainWindow.open_image_from_path()` so both the toolbar Open action
+  and the CLI argument share one code path. No `[project.scripts]` entry
+  point added yet — that's still `uv run python -m litho <path>` for now;
+  a bare `litho <path>` command comes for free once we package a binary
+  later (§2), since argv works the same way there.
 
 ---
 
