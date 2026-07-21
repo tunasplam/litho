@@ -6,8 +6,10 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-21` — project scaffolded with `uv`; no application code yet. Next
-step: build the package skeleton and `main_window.py`.
+`2026-07-21` — package skeleton and `main_window.py` are up: a window shell
+with both toolbars laid out (text-only actions, no icons yet) and a
+placeholder central widget. No canvas, tools, or file I/O yet. Next step:
+`canvas/view.py` and `canvas/scene.py`.
 
 ---
 
@@ -167,10 +169,10 @@ litho`, and committed on its own before moving to the next.
 
 | Component | Status | Notes |
 |---|---|---|
-| Project scaffold (`uv init`) | Done | Flat `main.py`, no deps yet. |
-| Package skeleton (`litho/` package, `__main__.py`) | Not started | Next up. |
-| `main_window.py` + toolbars (no working tools yet) | Not started | |
-| `canvas/view.py` + `canvas/scene.py` | Not started | |
+| Project scaffold (`uv init`) | Done | Flat `main.py`, now a thin shim into `litho.__main__`. |
+| Package skeleton (`litho/` package, `__main__.py`) | Done | |
+| `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
+| `canvas/view.py` + `canvas/scene.py` | Not started | Next up — replaces the central placeholder label. |
 | `canvas/items.py` | Not started | |
 | `tools/select.py` | Not started | |
 | `tools/polygon.py` | Not started | |
@@ -181,7 +183,7 @@ litho`, and committed on its own before moving to the next.
 | `commands.py` (undo/redo) | Not started | |
 | `io.py` (open/save/convert) | Not started | |
 | `icons.py` | Not started | |
-| Test scaffold (`conftest.py`, fixtures) | Not started | |
+| Test scaffold (`conftest.py`, fixtures) | Partial | `test_main_window.py` in place, using pytest-qt's built-in `qtbot`/`qapp` fixtures directly — no hand-rolled `conftest.py` needed yet. Will add one once tests need shared fixtures (e.g. sample images for `io.py`). |
 | Packaging (PyInstaller/Nuitka) | Not started | Deferred until the app works end to end. |
 
 ---
@@ -202,6 +204,16 @@ litho`, and committed on its own before moving to the next.
   §3) to keep files small and undo/redo consistent from the start.
 - **2026-07-21** — UI is top-toolbar-only, no status bar, no side panels
   (see §5) — confirmed against the interface mockup.
+- **2026-07-21** — `main.py` kept as a two-line shim into `litho.__main__`;
+  both `uv run python main.py` and `uv run python -m litho` work.
+- **2026-07-21** — No `[build-system]`/packaging metadata added to
+  `pyproject.toml`. The app isn't meant to be `pip install`-ed — we're
+  packaging as a standalone binary later (§2) — so instead
+  `tool.pytest.ini_options.pythonpath = ["."]` lets pytest find the
+  `litho/` package without installing it into the venv.
+- **2026-07-21** — Tests use pytest-qt's built-in `qtbot`/`qapp` fixtures
+  directly; no custom `conftest.py` yet. Run headless with
+  `QT_QPA_PLATFORM=offscreen`.
 
 ---
 
@@ -209,9 +221,6 @@ litho`, and committed on its own before moving to the next.
 
 - Exact keyboard shortcuts (delete selected item, escape to cancel an
   in-progress polygon, etc.) — decide while building `tools/`.
-- Whether `main.py` stays as a shim (`uv run python main.py`) alongside
-  `python -m litho`, or gets deleted in favor of the module entry point
-  only. Low stakes, decide when scaffolding the package.
 - Packaging specifics (PyInstaller vs. Nuitka, icon/desktop-file
   integration) — deferred until there's a working app to package.
 

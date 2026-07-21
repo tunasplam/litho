@@ -1,0 +1,162 @@
+"""The main application window: builds the two top toolbars and a canvas
+placeholder. Toolbar actions are not wired to real behavior yet — that
+lands with the canvas/tools/commands components. For now this file is
+about getting the window shell and toolbar layout right.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtWidgets import (
+    QComboBox,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QSpinBox,
+    QToolBar,
+    QWidget,
+)
+
+WINDOW_TITLE = "Litho"
+DEFAULT_WINDOW_SIZE = (1200, 800)
+
+EXPORT_FORMATS = ["PNG", "JPG", "BMP"]
+
+# Placeholder colors until a real color picker exists.
+DEFAULT_STROKE_COLOR = "#8fb8ff"
+DEFAULT_FILL_COLOR = "#00000000"  # transparent
+
+
+class MainWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle(WINDOW_TITLE)
+        self.resize(*DEFAULT_WINDOW_SIZE)
+
+        self._build_toolbar_row1()
+        self._build_toolbar_row2()
+        self._build_central_placeholder()
+
+    # ---------------------------------------------------------------
+    # Row 1: file / edit / zoom
+    # ---------------------------------------------------------------
+    def _build_toolbar_row1(self) -> None:
+        toolbar = self._new_toolbar("File")
+
+        self.action_new = toolbar.addAction("New")
+        self.action_open = toolbar.addAction("Open")
+        self.action_save = toolbar.addAction("Save")
+
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(EXPORT_FORMATS)
+        toolbar.addWidget(self.format_combo)
+
+        toolbar.addSeparator()
+
+        self.action_undo = toolbar.addAction("Undo")
+        self.action_redo = toolbar.addAction("Redo")
+        self.action_undo.setEnabled(False)
+        self.action_redo.setEnabled(False)
+
+        toolbar.addWidget(_stretch_spacer())
+
+        self.action_zoom_out = toolbar.addAction("−")
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setFixedWidth(42)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        toolbar.addWidget(self.zoom_label)
+        self.action_zoom_in = toolbar.addAction("+")
+        self.action_fit = toolbar.addAction("Fit")
+
+        self.addToolBar(toolbar)
+        self.addToolBarBreak()
+
+    # ---------------------------------------------------------------
+    # Row 2: drawing tools + contextual object properties
+    # ---------------------------------------------------------------
+    def _build_toolbar_row2(self) -> None:
+        toolbar = self._new_toolbar("Tools")
+
+        self.tool_group = QActionGroup(self)
+        self.tool_group.setExclusive(True)
+
+        self.action_select = self._add_tool_action(toolbar, "Select")
+        self.action_polygon = self._add_tool_action(toolbar, "Polygon")
+        self.action_line = self._add_tool_action(toolbar, "Line")
+        self.action_arrow = self._add_tool_action(toolbar, "Arrow")
+        self.action_double_arrow = self._add_tool_action(toolbar, "Double arrow")
+        self.action_freehand = self._add_tool_action(toolbar, "Freehand")
+        self.action_highlighter = self._add_tool_action(toolbar, "Highlighter")
+        self.action_text = self._add_tool_action(toolbar, "Text box")
+
+        self.action_select.setChecked(True)
+
+        toolbar.addSeparator()
+
+        self.stroke_swatch = _color_swatch(DEFAULT_STROKE_COLOR)
+        self.fill_swatch = _color_swatch(DEFAULT_FILL_COLOR, checker=True)
+        toolbar.addWidget(QLabel("Stroke"))
+        toolbar.addWidget(self.stroke_swatch)
+        toolbar.addWidget(QLabel("Fill"))
+        toolbar.addWidget(self.fill_swatch)
+
+        self.size_spin = QSpinBox()
+        self.size_spin.setRange(1, 200)
+        self.size_spin.setValue(14)
+        toolbar.addWidget(QLabel("Size"))
+        toolbar.addWidget(self.size_spin)
+
+        self.opacity_spin = QSpinBox()
+        self.opacity_spin.setRange(0, 100)
+        self.opacity_spin.setValue(100)
+        self.opacity_spin.setSuffix("%")
+        toolbar.addWidget(QLabel("Opacity"))
+        toolbar.addWidget(self.opacity_spin)
+
+        self.addToolBar(toolbar)
+
+    def _add_tool_action(self, toolbar: QToolBar, label: str) -> QAction:
+        action = toolbar.addAction(label)
+        action.setCheckable(True)
+        self.tool_group.addAction(action)
+        return action
+
+    # ---------------------------------------------------------------
+    # Central widget (temporary — replaced by canvas/view.py next)
+    # ---------------------------------------------------------------
+    def _build_central_placeholder(self) -> None:
+        placeholder = QLabel("Canvas — coming next")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setStyleSheet(
+            "border: 1px dashed palette(mid); color: palette(mid); margin: 24px;"
+        )
+        self.setCentralWidget(placeholder)
+
+    # ---------------------------------------------------------------
+    def _new_toolbar(self, name: str) -> QToolBar:
+        toolbar = QToolBar(name, self)
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        return toolbar
+
+
+def _color_swatch(color: str, checker: bool = False) -> QPushButton:
+    button = QPushButton()
+    button.setFixedSize(20, 20)
+    if checker:
+        button.setStyleSheet(
+            "background-color: #999; border: 1px solid rgba(255,255,255,0.3);"
+        )
+    else:
+        button.setStyleSheet(
+            f"background-color: {color}; border: 1px solid rgba(255,255,255,0.3);"
+        )
+    return button
+
+
+def _stretch_spacer() -> QWidget:
+    spacer = QWidget()
+    spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    return spacer
