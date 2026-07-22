@@ -6,17 +6,17 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-21` — the full Item/Tool pipeline works end to end for one shape:
-`HighlightItem` (canvas/items.py), the `Tool` base + `Style` dataclass
-(tools/base.py), `SelectTool`, and `HighlighterTool` are wired into
-`main_window.py` — you can open an image, pick Highlighter, drag out a
-highlight, switch to Select, move it, and press Delete to remove it.
-Stroke/fill color swatches open a real `QColorDialog`; size/opacity spin
-boxes feed the shared `Style` object tools read from. Polygon, Line,
-Arrow, Double-arrow, Freehand, and Text-box actions are present but
-disabled — same pattern, not implemented yet. Next step: pick one
-(probably `tools/line.py`, since `LineItem` covers plain line, arrow, and
-double-arrow together) and repeat the pattern.
+`2026-07-21` — Line, Arrow, and Double-arrow tools are live, on top of the
+existing Highlighter/Select pipeline. One `LineItem` (canvas/items.py)
+covers all three toolbar actions via a `head_style` flag (`"none"`,
+`"end"`, `"both"`); `tools/line.py`'s `LineTool` is instantiated three
+times in `main_window.py`, once per head style. You can open an image,
+draw a highlight, a plain line, an arrow, or a double-headed arrow,
+switch to Select, move any of them, and press Delete to remove it.
+Polygon, Freehand, and Text-box actions remain present but disabled —
+not implemented yet. Next step: pick one (`tools/freehand.py` is
+probably the simplest — drag-to-draw path, no vertex/click-to-close
+complexity) and repeat the pattern.
 
 ---
 
@@ -180,11 +180,11 @@ litho`, and committed on its own before moving to the next.
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
-| `canvas/items.py` | Partial | `HighlightItem` only. Polygon/Text/Line/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
+| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`. Polygon/Text/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
 | `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. |
 | `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
 | `tools/polygon.py` | Not started | |
-| `tools/line.py` | Not started | Will cover line, arrow, and double-arrow via a head-style flag on one `LineItem`. |
+| `tools/line.py` | Done | One `LineTool`/`LineItem` pair, instantiated three times (Line/Arrow/Double-arrow) with different `head_style` values. |
 | `tools/freehand.py` | Not started | |
 | `tools/highlighter.py` | Done | Drag-to-draw `HighlightItem`; always translucent (`BASE_OPACITY = 0.4`) scaled further by the Opacity control — a highlighter that isn't translucent by default isn't very useful. |
 | `tools/text.py` | Not started | |
@@ -269,6 +269,15 @@ litho`, and committed on its own before moving to the next.
   `CanvasView.keyPressEvent` rather than as a toolbar action — matches how
   every other image/drawing tool does it, and keeps the toolbar from
   growing a button for something a key already does well.
+- **2026-07-21** — One `LineItem`/`LineTool` pair covers Line, Arrow, and
+  Double-arrow rather than three separate item/tool classes: they only
+  differ in a `head_style` flag (`"none"`/`"end"`/`"both"`), and
+  `main_window.py` just constructs `LineTool` three times with different
+  arguments. `LineItem` subclasses `QGraphicsLineItem` for the free
+  selection outline, then overrides `paint()` to add arrowhead triangles
+  on top and `boundingRect()` to pad for them (only when a head is
+  actually drawn, so plain lines don't get an oversized hit/repaint
+  region for arrowheads they'll never have).
 
 ---
 

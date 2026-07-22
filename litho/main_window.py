@@ -21,10 +21,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from litho.canvas.items import LineItem
 from litho.canvas.scene import CanvasScene
 from litho.canvas.view import CanvasView
 from litho.tools.base import Style, Tool
 from litho.tools.highlighter import HighlighterTool
+from litho.tools.line import LineTool
 from litho.tools.select import SelectTool
 
 WINDOW_TITLE = "Litho"
@@ -113,9 +115,6 @@ class MainWindow(QMainWindow):
         # Not implemented yet — disabled rather than clickable-but-broken.
         for action in (
             self.action_polygon,
-            self.action_line,
-            self.action_arrow,
-            self.action_double_arrow,
             self.action_freehand,
             self.action_text,
         ):
@@ -199,6 +198,11 @@ class MainWindow(QMainWindow):
         self.tools: dict[QAction, Tool] = {
             self.action_select: SelectTool(self.view, self.style),
             self.action_highlighter: HighlighterTool(self.view, self.style),
+            self.action_line: LineTool(self.view, self.style, head_style=LineItem.HEAD_NONE),
+            self.action_arrow: LineTool(self.view, self.style, head_style=LineItem.HEAD_END),
+            self.action_double_arrow: LineTool(
+                self.view, self.style, head_style=LineItem.HEAD_BOTH
+            ),
         }
         self.tool_group.triggered.connect(self._on_tool_changed)
         self.view.set_tool(self.tools[self.action_select])

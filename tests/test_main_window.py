@@ -3,6 +3,7 @@ from PySide6.QtGui import QColor, QPixmap
 
 from litho.main_window import MainWindow
 from litho.tools.highlighter import HighlighterTool
+from litho.tools.line import LineTool
 from litho.tools.select import SelectTool
 
 
@@ -46,13 +47,18 @@ def test_unimplemented_tool_actions_are_disabled(qtbot):
 
     for action in (
         window.action_polygon,
-        window.action_line,
-        window.action_arrow,
-        window.action_double_arrow,
         window.action_freehand,
         window.action_text,
     ):
         assert not action.isEnabled()
+
+
+def test_line_tool_actions_are_enabled(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    for action in (window.action_line, window.action_arrow, window.action_double_arrow):
+        assert action.isEnabled()
 
 
 def test_export_format_defaults_to_png(qtbot):
@@ -152,6 +158,16 @@ def test_choosing_highlighter_switches_the_active_tool(qtbot):
     window.action_highlighter.trigger()
 
     assert isinstance(window.view._active_tool, HighlighterTool)
+
+
+def test_choosing_arrow_switches_the_active_tool(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_arrow.trigger()
+
+    assert isinstance(window.view._active_tool, LineTool)
+    assert window.view._active_tool.head_style == "end"
 
 
 def test_picking_a_new_stroke_color_updates_style_and_swatch(qtbot, monkeypatch):
