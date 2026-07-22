@@ -1,14 +1,15 @@
-"""The main application window: builds the two top toolbars and a canvas
-placeholder. Toolbar actions are not wired to real behavior yet — that
-lands with the canvas/tools/commands components. For now this file is
-about getting the window shell and toolbar layout right.
+"""The main application window: builds the two top toolbars, the canvas,
+and wires them together. Tool switching updates the canvas's active tool;
+the stroke/fill/size/opacity controls feed a shared Style object that
+tools read from when they create new items.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QColor, QPixmap
 from PySide6.QtWidgets import (
+    QColorDialog,
     QComboBox,
     QFileDialog,
     QLabel,
@@ -22,6 +23,9 @@ from PySide6.QtWidgets import (
 
 from litho.canvas.scene import CanvasScene
 from litho.canvas.view import CanvasView
+from litho.tools.base import Style, Tool
+from litho.tools.highlighter import HighlighterTool
+from litho.tools.select import SelectTool
 
 WINDOW_TITLE = "Litho"
 DEFAULT_WINDOW_SIZE = (1200, 800)
@@ -32,9 +36,8 @@ EXPORT_FORMATS = ["PNG", "JPG", "BMP"]
 # something on screen while the canvas is being built.
 IMAGE_FILE_FILTER = "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)"
 
-# Placeholder colors until a real color picker exists.
 DEFAULT_STROKE_COLOR = "#8fb8ff"
-DEFAULT_FILL_COLOR = "#00000000"  # transparent
+DEFAULT_FILL_COLOR = "#f5c451"
 
 
 class MainWindow(QMainWindow):
@@ -47,6 +50,8 @@ class MainWindow(QMainWindow):
         self._build_toolbar_row2()
         self._build_canvas()
         self._connect_canvas_actions()
+        self._build_tools()
+        self._connect_style_controls()
 
         if initial_image:
             self.open_image_from_path(initial_image)
@@ -105,10 +110,21 @@ class MainWindow(QMainWindow):
 
         self.action_select.setChecked(True)
 
+        # Not implemented yet — disabled rather than clickable-but-broken.
+        for action in (
+            self.action_polygon,
+            self.action_line,
+            self.action_arrow,
+            self.action_double_arrow,
+            self.action_freehand,
+            self.action_text,
+        ):
+            action.setEnabled(False)
+
         toolbar.addSeparator()
 
         self.stroke_swatch = _color_swatch(DEFAULT_STROKE_COLOR)
-        self.fill_swatch = _color_swatch(DEFAULT_FILL_COLOR, checker=True)
+        self.fill_swatch = _color_swatch(DEFAULT_FILL_COLOR)
         toolbar.addWidget(QLabel("Stroke"))
         toolbar.addWidget(self.stroke_swatch)
         toolbar.addWidget(QLabel("Fill"))
@@ -171,6 +187,52 @@ class MainWindow(QMainWindow):
         self.zoom_label.setText(f"{round(zoom * 100)}%")
 
     # ---------------------------------------------------------------
+    # Tools + style
+    # ---------------------------------------------------------------
+    def _build_tools(self) -> None:
+        self.style = Style(
+            stroke_color=QColor(DEFAULT_STROKE_COLOR),
+            fill_color=QColor(DEFAULT_FILL_COLOR),
+            size=self.size_spin.value(),
+            opacity=self.opacity_spin.value(),
+        )
+        self.tools: dict[QAction, Tool] = {
+            self.action_select: SelectTool(self.view, self.style),
+            self.action_highlighter: HighlighterTool(self.view, self.style),
+        }
+        self.tool_group.triggered.connect(self._on_tool_changed)
+        self.view.set_tool(self.tools[self.action_select])
+
+    def _on_tool_changed(self, action: QAction) -> None:
+        tool = self.tools.get(action)
+        if tool is not None:
+            self.view.set_tool(tool)
+
+    def _connect_style_controls(self) -> None:
+        self.stroke_swatch.clicked.connect(self._on_pick_stroke_color)
+        self.fill_swatch.clicked.connect(self._on_pick_fill_color)
+        self.size_spin.valueChanged.connect(self._on_size_changed)
+        self.opacity_spin.valueChanged.connect(self._on_opacity_changed)
+
+    def _on_pick_stroke_color(self) -> None:
+        color = QColorDialog.getColor(self.style.stroke_color, self, "Stroke color")
+        if color.isValid():
+            self.style.stroke_color = color
+            _set_swatch_color(self.stroke_swatch, color)
+
+    def _on_pick_fill_color(self) -> None:
+        color = QColorDialog.getColor(self.style.fill_color, self, "Fill color")
+        if color.isValid():
+            self.style.fill_color = color
+            _set_swatch_color(self.fill_swatch, color)
+
+    def _on_size_changed(self, value: int) -> None:
+        self.style.size = value
+
+    def _on_opacity_changed(self, value: int) -> None:
+        self.style.opacity = value
+
+    # ---------------------------------------------------------------
     def _new_toolbar(self, name: str) -> QToolBar:
         toolbar = QToolBar(name, self)
         toolbar.setMovable(False)
@@ -178,18 +240,20 @@ class MainWindow(QMainWindow):
         return toolbar
 
 
-def _color_swatch(color: str, checker: bool = False) -> QPushButton:
+def _color_swatch(color: str) -> QPushButton:
     button = QPushButton()
     button.setFixedSize(20, 20)
-    if checker:
-        button.setStyleSheet(
-            "background-color: #999; border: 1px solid rgba(255,255,255,0.3);"
-        )
-    else:
-        button.setStyleSheet(
-            f"background-color: {color}; border: 1px solid rgba(255,255,255,0.3);"
-        )
+    button.setStyleSheet(
+        f"background-color: {color}; border: 1px solid rgba(255,255,255,0.3);"
+    )
     return button
+
+
+def _set_swatch_color(button: QPushButton, color: QColor) -> None:
+    button.setStyleSheet(
+        f"background-color: {color.name(QColor.NameFormat.HexArgb)}; "
+        "border: 1px solid rgba(255,255,255,0.3);"
+    )
 
 
 def _stretch_spacer() -> QWidget:

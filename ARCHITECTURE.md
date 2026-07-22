@@ -6,13 +6,17 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-21` — canvas is up: `CanvasScene` holds a background image,
-`CanvasView` handles zoom in/out/fit, both wired into `main_window.py`
-along with a minimal Open action so the canvas can actually be exercised
-(real open/save/format-conversion still belongs to `io.py`, not started).
-`litho <path>` on the command line now opens straight to an image via
-`litho/__main__.py`'s `argparse` handling. No drawing tools or annotation
-items yet. Next step: `canvas/items.py` and `tools/select.py`.
+`2026-07-21` — the full Item/Tool pipeline works end to end for one shape:
+`HighlightItem` (canvas/items.py), the `Tool` base + `Style` dataclass
+(tools/base.py), `SelectTool`, and `HighlighterTool` are wired into
+`main_window.py` — you can open an image, pick Highlighter, drag out a
+highlight, switch to Select, move it, and press Delete to remove it.
+Stroke/fill color swatches open a real `QColorDialog`; size/opacity spin
+boxes feed the shared `Style` object tools read from. Polygon, Line,
+Arrow, Double-arrow, Freehand, and Text-box actions are present but
+disabled — same pattern, not implemented yet. Next step: pick one
+(probably `tools/line.py`, since `LineItem` covers plain line, arrow, and
+double-arrow together) and repeat the pattern.
 
 ---
 
@@ -176,12 +180,13 @@ litho`, and committed on its own before moving to the next.
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
-| `canvas/items.py` | Not started | Next up. |
-| `tools/select.py` | Not started | |
+| `canvas/items.py` | Partial | `HighlightItem` only. Polygon/Text/Line/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
+| `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. |
+| `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
 | `tools/polygon.py` | Not started | |
-| `tools/line.py` | Not started | |
+| `tools/line.py` | Not started | Will cover line, arrow, and double-arrow via a head-style flag on one `LineItem`. |
 | `tools/freehand.py` | Not started | |
-| `tools/highlighter.py` | Not started | |
+| `tools/highlighter.py` | Done | Drag-to-draw `HighlightItem`; always translucent (`BASE_OPACITY = 0.4`) scaled further by the Opacity control — a highlighter that isn't translucent by default isn't very useful. |
 | `tools/text.py` | Not started | |
 | `commands.py` (undo/redo) | Not started | |
 | `io.py` (open/save/convert) | Not started | |
@@ -237,6 +242,33 @@ litho`, and committed on its own before moving to the next.
   point added yet — that's still `uv run python -m litho <path>` for now;
   a bare `litho <path>` command comes for free once we package a binary
   later (§2), since argv works the same way there.
+- **2026-07-21** — Item classes subclass Qt's standard graphics items
+  (`QGraphicsRectItem`, and later `QGraphicsPolygonItem`/`QGraphicsLineItem`/
+  `QGraphicsPathItem`/`QGraphicsTextItem`) rather than a from-scratch
+  `QGraphicsItem`. They draw their own selection indicator (the dashed
+  outline) for free, which is most of what `tools/select.py` needed.
+- **2026-07-21** — `SelectTool` does almost nothing itself: Qt's own
+  `QGraphicsView`/`QGraphicsScene` already handle click-to-select,
+  rubber-band multi-select, and drag-to-move once an item has
+  `ItemIsSelectable`/`ItemIsMovable` set. The tool just puts the view in
+  `RubberBandDrag` mode; `CanvasView` calls Qt's default mouse handling
+  instead of a custom handler whenever `SelectTool` (or any future tool
+  with `handles_own_events = False`) is active.
+- **2026-07-21** — Introduced `tools/base.py:Style`, a small dataclass
+  holding the current stroke/fill/size/opacity from the toolbar.
+  `main_window.py` owns one instance and mutates it as the controls
+  change; every tool gets a reference to the same object at construction,
+  so a newly created item always picks up whatever's currently set
+  without tools needing to know about `MainWindow` itself.
+- **2026-07-21** — `HighlighterTool` applies a fixed `BASE_OPACITY = 0.4`
+  multiplied by the toolbar's Opacity control, rather than using Opacity
+  directly. A highlight at 100% opacity would fully obscure the image,
+  which defeats the point of a highlighter — real highlighter pens are
+  translucent by nature, so that's the default here too.
+- **2026-07-21** — Delete/Backspace removes selected items, handled in
+  `CanvasView.keyPressEvent` rather than as a toolbar action — matches how
+  every other image/drawing tool does it, and keeps the toolbar from
+  growing a button for something a key already does well.
 
 ---
 

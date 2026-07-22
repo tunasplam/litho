@@ -1,7 +1,9 @@
-from PySide6.QtCore import QSize
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QPixmap
 
 from litho.main_window import MainWindow
+from litho.tools.highlighter import HighlighterTool
+from litho.tools.select import SelectTool
 
 
 def test_window_title(qtbot):
@@ -32,10 +34,25 @@ def test_tool_actions_are_mutually_exclusive(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
-    window.action_polygon.trigger()
+    window.action_highlighter.trigger()
 
-    assert window.action_polygon.isChecked()
+    assert window.action_highlighter.isChecked()
     assert not window.action_select.isChecked()
+
+
+def test_unimplemented_tool_actions_are_disabled(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    for action in (
+        window.action_polygon,
+        window.action_line,
+        window.action_arrow,
+        window.action_double_arrow,
+        window.action_freehand,
+        window.action_text,
+    ):
+        assert not action.isEnabled()
 
 
 def test_export_format_defaults_to_png(qtbot):
@@ -119,3 +136,68 @@ def test_constructing_with_initial_image_loads_it(qtbot, tmp_path):
 
     assert window.scene.has_image
     assert window.scene.image_size() == QSize(64, 64)
+
+
+def test_select_tool_is_active_on_the_view_by_default(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert isinstance(window.view._active_tool, SelectTool)
+
+
+def test_choosing_highlighter_switches_the_active_tool(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_highlighter.trigger()
+
+    assert isinstance(window.view._active_tool, HighlighterTool)
+
+
+def test_picking_a_new_stroke_color_updates_style_and_swatch(qtbot, monkeypatch):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    new_color = QColor("#00ff00")
+    monkeypatch.setattr(
+        "litho.main_window.QColorDialog.getColor", lambda *a, **k: new_color
+    )
+
+    window._on_pick_stroke_color()
+
+    assert window.style.stroke_color == new_color
+
+
+def test_changing_size_spin_updates_style(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.size_spin.setValue(42)
+
+    assert window.style.size == 42
+
+
+def test_changing_opacity_spin_updates_style(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.opacity_spin.setValue(30)
+
+    assert window.style.opacity == 30
+
+
+def test_delete_key_removes_selected_item(qtbot, tmp_path):
+    image_path = tmp_path / "sample.png"
+    QPixmap(200, 200).save(str(image_path))
+    window = MainWindow(initial_image=str(image_path))
+    qtbot.addWidget(window)
+
+    window.action_highlighter.trigger()
+    tool = window.view._active_tool
+    tool.on_press(tool.view.mapToScene(10, 10))
+    tool.on_release(tool.view.mapToScene(40, 40))
+    assert len(window.scene.items()) == 2  # background + highlight
+
+    window.scene.items()[0].setSelected(True)
+    qtbot.keyClick(window.view, Qt.Key.Key_Delete)
+
+    assert len(window.scene.items()) == 1  # just the background left

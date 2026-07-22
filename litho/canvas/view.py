@@ -26,11 +26,13 @@ class CanvasView(QGraphicsView):
         # it out from under us.
         self._scene = scene
         self._zoom = 1.0
+        self._active_tool = None
 
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setBackgroundBrush(BACKGROUND_COLOR)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     @property
     def zoom(self) -> float:
@@ -58,3 +60,44 @@ class CanvasView(QGraphicsView):
         self.fitInView(scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         self._zoom = self.transform().m11()
         self.zoom_changed.emit(self._zoom)
+
+    # ---------------------------------------------------------------
+    # Active tool + event routing
+    # ---------------------------------------------------------------
+    def set_tool(self, tool) -> None:
+        if self._active_tool is not None:
+            self._active_tool.deactivate()
+        self._active_tool = tool
+        if tool is not None:
+            tool.activate()
+
+    def mousePressEvent(self, event) -> None:
+        if self._active_tool is None or not self._active_tool.handles_own_events:
+            super().mousePressEvent(event)
+            return
+        self._active_tool.on_press(self.mapToScene(event.position().toPoint()))
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._active_tool is None or not self._active_tool.handles_own_events:
+            super().mouseMoveEvent(event)
+            return
+        self._active_tool.on_move(self.mapToScene(event.position().toPoint()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._active_tool is None or not self._active_tool.handles_own_events:
+            super().mouseReleaseEvent(event)
+            return
+        self._active_tool.on_release(self.mapToScene(event.position().toPoint()))
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self._delete_selected_items()
+            return
+        super().keyPressEvent(event)
+
+    def _delete_selected_items(self) -> None:
+        scene = self.scene()
+        if scene is None:
+            return
+        for item in scene.selectedItems():
+            scene.removeItem(item)
