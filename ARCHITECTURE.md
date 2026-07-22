@@ -1,59 +1,28 @@
 # Litho — Architecture
 
-A small, personal image annotation tool: open an image, draw polygons, text
-boxes, highlights, freehand strokes, and lines/arrows on top of it, adjust
-their color/size/opacity, and save/export back out (with format conversion
-between PNG/JPG/BMP/etc.).
+A small, personal image annotation tool: open an image, draw rectangles,
+text boxes, highlights, freehand strokes, and lines/arrows on top of it,
+adjust their color/size/opacity, and save/export back out (with format
+conversion between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-22` — Three trial-usage fixes landed on the Arrow tools today.
-(1) Arrow/Double-arrow heads were a fixed 14px regardless of stroke size,
-so a large enough Size value made the line thickness swallow the
-arrowhead entirely — `LineItem`'s arrowhead length (canvas/items.py) now
-scales with pen width (`max(ARROW_LENGTH_MIN, width *
-ARROW_LENGTH_SCALE)`). (2) The shaft was drawn all the way to the tip and
-the arrowhead painted on top, which left a visible seam at the head's
-base (worse at partial opacity, where the overlap double-composites) —
-`LineItem.paint()` now custom-draws a shortened `_shaft_line()` that
-stops exactly at the arrowhead's base (`_arrow_base_distance = length *
-cos(spread)`, not `length` itself — that's the distance to the base's
-*corners*, not the base line) instead of delegating to
-`QGraphicsLineItem.paint()`. Losing that delegation meant losing Qt's
-free selection-highlight rendering too, so arrow lines now paint their
-own dashed selection rect. (3) Along the way, switched the shaft's pen
-cap from Round to `Qt.PenCapStyle.FlatCap` for any line with a head —
-first tried `SquareCap`, which turned out to be a false friend: despite
-the name it still extends half the pen width past the endpoint (same
-bounding box as RoundCap, just square-shaped), which reintroduced the
-seam at large widths; `FlatCap` is the one that actually stops exactly at
-the endpoint. Plain lines (no head) are untouched by any of this — same
-round cap, same `QGraphicsLineItem.paint()` delegation as before. (4)
-Even cut exactly at the base, two separately-painted shapes meeting at a
-precise seam still left a hairline anti-aliasing gap — added
-`ARROW_SHAFT_OVERLAP = 1.5`, subtracted from the cutoff distance so the
-shaft deliberately runs a little way into the head instead of stopping
-exactly at its edge. Confirmed clean (no gap, no seam) at the toolbar's
-default 100% opacity; at reduced opacity the overlap band very slightly
-double-composites, which is a real but much more minor trade-off than the
-gap it replaces — not fixed here, noted below.
-Also landed the Freehand tool this session — `FreehandItem` subclasses
-`QGraphicsPathItem`; `tools/freehand.py`'s `FreehandTool` starts a path
-on press and calls `add_point()` on every subsequent move, same drag
-lifecycle as the Highlighter tool. And audited which of the four style
-controls (Stroke/Fill/Size/Opacity) each tool actually reads — several
-were dead for a given tool with no indication in the UI — each `Tool`
-subclass now declares `uses_stroke`/`uses_fill`/`uses_size`/
-`uses_opacity` (tools/base.py), and
-`MainWindow._update_style_controls_for_tool` greys out whichever don't
-apply to the active tool. You can open an image, draw a highlight, a
-line/arrow/double-arrow, a freehand stroke, place and edit text, switch
-to Select, move any of them, and press Delete to remove it. Only Polygon
-remains present but disabled — not implemented yet. Two known
-inconsistencies from the style-control audit are still open: arrowheads
-are filled with the Stroke color despite being a filled shape, and
+`2026-07-22` — Rectangle tool added, replacing Polygon's toolbar slot —
+Polygon was dropped from scope (Freehand/Line/Rectangle already cover the
+need, per direct feedback). `RectangleItem` (canvas/items.py) is an
+unfilled `QGraphicsRectItem` (`NoBrush`); `tools/rectangle.py`'s
+`RectangleTool` drags it out the same way `HighlighterTool` drags out a
+`HighlightItem`, but reads Stroke (border color) + Size (border
+thickness) instead of Fill — `uses_fill = False`. Every drawing tool is
+now implemented: Select, Rectangle, Line/Arrow/Double-arrow, Freehand,
+Highlighter, Text box. All support move/select/delete. Two known,
+unfixed inconsistencies from an earlier style-control audit: arrowheads
+fill with the Stroke color despite being a filled shape, and
 Highlighter's Opacity is capped at a 0.4× multiplier while every other
-tool applies it directly. Next: Polygon, then `commands.py` (undo/redo)
-and `io.py` (save/export).
+tool applies it directly. Next: `commands.py` (undo/redo), then `io.py`
+(save/export) — those are the two remaining pieces before the app is
+functionally complete end to end. Full session-by-session history has
+moved to §8 (Decisions log) to keep this snapshot short — read that for
+the reasoning behind any specific past choice.
 
 ---
 
@@ -143,13 +112,13 @@ litho/
 │   │   ├── __init__.py
 │   │   ├── scene.py          # QGraphicsScene — background image + all annotation items
 │   │   ├── view.py           # QGraphicsView — zoom, pan, fit-to-window
-│   │   └── items.py          # PolygonItem, TextBoxItem, LineItem, FreehandItem, HighlightItem
+│   │   └── items.py          # RectangleItem, TextBoxItem, LineItem, FreehandItem, HighlightItem
 │   │
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── base.py           # Tool interface (mouse press/move/release hooks)
 │   │   ├── select.py         # move/resize/select existing items
-│   │   ├── polygon.py        # click-to-place-vertex, double-click/enter to close
+│   │   ├── rectangle.py      # drag-to-draw unfilled outline
 │   │   ├── line.py           # line / arrow / double-arrow via a mode flag
 │   │   ├── freehand.py       # drag-to-draw path
 │   │   ├── highlighter.py    # drag-to-draw translucent rect
@@ -159,17 +128,10 @@ litho/
 │   ├── io.py                 # open/save, format conversion, flatten annotations on export
 │   └── icons.py              # toolbar icons (from the mockup SVGs)
 │
-└── tests/
-    ├── conftest.py            # session-scoped QApplication fixture, shared fixtures
-    ├── fixtures/
-    │   └── sample.png
-    ├── test_items.py          # resize math, bounding boxes
-    ├── test_commands.py       # undo/redo correctness
-    ├── test_io.py             # open/save round-trips, format conversion
-    ├── test_export.py         # annotations flatten onto exported image correctly
-    ├── test_tools_polygon.py
-    ├── test_tools_line.py
-    └── test_tools_text.py
+└── tests/                    # actual test files are named test_canvas_items.py,
+    ├── test_canvas_items.py  # test_tools_<name>.py, etc. — see the repo for
+    ├── test_tools_*.py       # the current list; this tree is the original,
+    └── ...                   # since-drifted target layout from project setup.
 ```
 
 ---
@@ -184,9 +146,9 @@ New · Open · Save · export format dropdown (PNG/JPG/BMP) · Undo · Redo ·
 zoom out / percentage / zoom in / fit-to-window
 
 **Row 2 — tools + contextual properties**
-Select · Polygon · Line · Arrow · Double-arrow · Freehand · Highlighter ·
+Select · Rectangle · Line · Arrow · Double-arrow · Freehand · Highlighter ·
 Text box — then, for whatever's currently selected: stroke color, fill
-color, size (stroke width for shapes, font size for text), opacity.
+color, size (stroke/border width for shapes, font size for text), opacity.
 
 Text boxes are edited in place: double-click to enter edit mode, click away
 or Esc to commit.
@@ -217,10 +179,10 @@ litho`, and committed on its own before moving to the next.
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
-| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`, `TextBoxItem`, `FreehandItem`. Polygon item follows the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
+| `canvas/items.py` | Done | `HighlightItem`, `RectangleItem`, `LineItem`, `TextBoxItem`, `FreehandItem` — every drawing tool has a backing item now. |
 | `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. `Tool` also declares `uses_stroke`/`uses_fill`/`uses_size`/`uses_opacity` (default all `True`), which each subclass narrows to what it actually reads — drives which toolbar controls `main_window.py` greys out per active tool. |
 | `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
-| `tools/polygon.py` | Not started | |
+| `tools/rectangle.py` | Done | Drag-to-draw `RectangleItem`, unfilled (`NoBrush`) — same drag lifecycle as `HighlighterTool` but reads Stroke (border color) + Size (border width) instead of Fill. |
 | `tools/line.py` | Done | One `LineTool`/`LineItem` pair, instantiated three times (Line/Arrow/Double-arrow) with different `head_style` values. |
 | `tools/freehand.py` | Done | Drag-to-draw `FreehandItem` (`QGraphicsPathItem`); `on_press` starts the path, `on_move` appends a point per event via `add_point()`. |
 | `tools/highlighter.py` | Done | Drag-to-draw `HighlightItem`; always translucent (`BASE_OPACITY = 0.4`) scaled further by the Opacity control — a highlighter that isn't translucent by default isn't very useful. |
@@ -362,7 +324,7 @@ litho`, and committed on its own before moving to the next.
   `elementAt()` on the result segfaults the interpreter). `setPath()`
   called after a no-arg construction works correctly. `FreehandItem`
   already used this pattern by luck of how it was written; noting it here
-  since it'll bite again if a `Polygon`/other path-based item is
+  since it'll bite again if a future `QGraphicsPathItem`-based item is
   constructed the more obvious way.
 - **2026-07-22** — Chose "grey out the controls that don't apply" over
   the alternatives (hide/show controls dynamically per tool, or relabel
@@ -423,13 +385,24 @@ litho`, and committed on its own before moving to the next.
   offscreen buffer at full alpha and applying `Style.opacity` once to
   the merged result, which is more machinery than this warrants unless
   it turns out to matter in practice.
+- **2026-07-22** — Dropped Polygon from scope entirely, on direct
+  feedback: Freehand/Line/Rectangle already cover what a polygon tool
+  would be used for here, and it was the one drawing tool with real
+  extra complexity (multi-click vertex placement, double-click/Enter to
+  close, editing an existing vertex list) for comparatively little
+  payoff in a single-user annotation tool. Its toolbar slot was repurposed
+  for Rectangle rather than adding a new button and leaving a dead
+  disabled one in place.
+- **2026-07-22** — `RectangleItem` uses `Qt.PenJoinStyle.MiterJoin`
+  rather than the `RoundJoin` every other pen-stroked item here uses —
+  intentional, not an oversight: a highlight/selection-style rectangle
+  reads as a rectangle because its corners are sharp; a rounded join
+  would make it look like a rounded-rect, a different shape.
 
 ---
 
 ## 9. Open questions
 
-- Exact keyboard shortcuts (delete selected item, escape to cancel an
-  in-progress polygon, etc.) — decide while building `tools/`.
 - Packaging specifics (PyInstaller vs. Nuitka, icon/desktop-file
   integration) — deferred until there's a working app to package.
 

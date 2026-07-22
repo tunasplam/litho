@@ -39,6 +39,33 @@ class HighlightItem(QGraphicsRectItem):
         self.setBrush(QBrush(color))
 
 
+class RectangleItem(QGraphicsRectItem):
+    """An unfilled rectangle outline — Highlighter's opposite: no fill at
+    all, just a colored, sized border. Stroke controls the border color,
+    Size controls its thickness.
+    """
+
+    def __init__(self, rect: QRectF, color: QColor, width: int) -> None:
+        super().__init__(rect)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.setBrush(Qt.BrushStyle.NoBrush)
+        self.setPen(
+            QPen(
+                color,
+                width,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.SquareCap,
+                Qt.PenJoinStyle.MiterJoin,
+            )
+        )
+
+    def set_color(self, color: QColor) -> None:
+        pen = self.pen()
+        pen.setColor(color)
+        self.setPen(pen)
+
+
 class LineItem(QGraphicsLineItem):
     """A straight line, optionally with arrowheads at either end. One item
     type covers the toolbar's Line/Arrow/Double-arrow tools — they only

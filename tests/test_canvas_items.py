@@ -5,7 +5,7 @@ from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene, QGraphicsView
 
-from litho.canvas.items import FreehandItem, HighlightItem, LineItem, TextBoxItem
+from litho.canvas.items import FreehandItem, HighlightItem, LineItem, RectangleItem, TextBoxItem
 
 
 def _active_scene(qtbot):
@@ -46,6 +46,41 @@ def test_set_color_updates_brush(qapp):
     item.set_color(QColor("#8fb8ff"))
 
     assert item.brush().color() == QColor("#8fb8ff")
+
+
+def test_rectangle_item_stores_rect(qapp):
+    rect = QRectF(10, 20, 100, 50)
+    item = RectangleItem(rect, QColor("#8fb8ff"), width=4)
+
+    assert item.rect() == rect
+
+
+def test_rectangle_item_is_selectable_and_movable(qapp):
+    item = RectangleItem(QRectF(0, 0, 10, 10), QColor("#8fb8ff"), width=4)
+
+    assert item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+    assert item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsMovable
+
+
+def test_rectangle_item_has_no_fill(qapp):
+    item = RectangleItem(QRectF(0, 0, 10, 10), QColor("#8fb8ff"), width=4)
+
+    assert item.brush().style() == Qt.BrushStyle.NoBrush
+
+
+def test_rectangle_item_pen_uses_stroke_color_and_width(qapp):
+    item = RectangleItem(QRectF(0, 0, 10, 10), QColor("#8fb8ff"), width=6)
+
+    assert item.pen().color() == QColor("#8fb8ff")
+    assert item.pen().widthF() == 6
+
+
+def test_rectangle_item_set_color_updates_pen(qapp):
+    item = RectangleItem(QRectF(0, 0, 10, 10), QColor("#8fb8ff"), width=4)
+
+    item.set_color(QColor("#f5c451"))
+
+    assert item.pen().color() == QColor("#f5c451")
 
 
 def test_line_item_stores_line(qapp):

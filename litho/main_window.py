@@ -28,6 +28,7 @@ from litho.tools.base import Style, Tool
 from litho.tools.freehand import FreehandTool
 from litho.tools.highlighter import HighlighterTool
 from litho.tools.line import LineTool
+from litho.tools.rectangle import RectangleTool
 from litho.tools.select import SelectTool
 from litho.tools.text import TextTool
 
@@ -104,7 +105,7 @@ class MainWindow(QMainWindow):
         self.tool_group.setExclusive(True)
 
         self.action_select = self._add_tool_action(toolbar, "Select")
-        self.action_polygon = self._add_tool_action(toolbar, "Polygon")
+        self.action_rectangle = self._add_tool_action(toolbar, "Rectangle")
         self.action_line = self._add_tool_action(toolbar, "Line")
         self.action_arrow = self._add_tool_action(toolbar, "Arrow")
         self.action_double_arrow = self._add_tool_action(toolbar, "Double arrow")
@@ -113,9 +114,6 @@ class MainWindow(QMainWindow):
         self.action_text = self._add_tool_action(toolbar, "Text box")
 
         self.action_select.setChecked(True)
-
-        # Not implemented yet — disabled rather than clickable-but-broken.
-        self.action_polygon.setEnabled(False)
 
         toolbar.addSeparator()
 
@@ -206,6 +204,7 @@ class MainWindow(QMainWindow):
             ),
             self.action_text: TextTool(self.view, self.style),
             self.action_freehand: FreehandTool(self.view, self.style),
+            self.action_rectangle: RectangleTool(self.view, self.style),
         }
         self.tool_group.triggered.connect(self._on_tool_changed)
         self.view.set_tool(self.tools[self.action_select])

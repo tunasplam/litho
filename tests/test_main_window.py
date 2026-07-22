@@ -7,6 +7,7 @@ from litho.main_window import MainWindow
 from litho.tools.freehand import FreehandTool
 from litho.tools.highlighter import HighlighterTool
 from litho.tools.line import LineTool
+from litho.tools.rectangle import RectangleTool
 from litho.tools.select import SelectTool
 from litho.tools.text import TextTool
 
@@ -24,7 +25,7 @@ def test_select_tool_is_active_by_default(qtbot):
 
     assert window.action_select.isChecked()
     for action in (
-        window.action_polygon,
+        window.action_rectangle,
         window.action_line,
         window.action_arrow,
         window.action_double_arrow,
@@ -45,23 +46,18 @@ def test_tool_actions_are_mutually_exclusive(qtbot):
     assert not window.action_select.isChecked()
 
 
-def test_unimplemented_tool_actions_are_disabled(qtbot):
-    window = MainWindow()
-    qtbot.addWidget(window)
-
-    assert not window.action_polygon.isEnabled()
-
-
-def test_line_text_and_freehand_tool_actions_are_enabled(qtbot):
+def test_all_drawing_tool_actions_are_enabled(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
     for action in (
+        window.action_rectangle,
         window.action_line,
         window.action_arrow,
         window.action_double_arrow,
         window.action_text,
         window.action_freehand,
+        window.action_highlighter,
     ):
         assert action.isEnabled()
 
@@ -184,6 +180,15 @@ def test_choosing_freehand_switches_the_active_tool(qtbot):
     assert isinstance(window.view._active_tool, FreehandTool)
 
 
+def test_choosing_rectangle_switches_the_active_tool(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_rectangle.trigger()
+
+    assert isinstance(window.view._active_tool, RectangleTool)
+
+
 def test_choosing_text_switches_the_active_tool(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
@@ -247,6 +252,18 @@ def test_text_tool_disables_fill_only(qtbot):
     qtbot.addWidget(window)
 
     window.action_text.trigger()
+
+    assert not window.fill_swatch.isEnabled()
+    assert window.stroke_swatch.isEnabled()
+    assert window.size_spin.isEnabled()
+    assert window.opacity_spin.isEnabled()
+
+
+def test_rectangle_tool_disables_fill_only(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_rectangle.trigger()
 
     assert not window.fill_swatch.isEnabled()
     assert window.stroke_swatch.isEnabled()
