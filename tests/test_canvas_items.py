@@ -2,7 +2,7 @@ from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene, QGraphicsView
 
-from litho.canvas.items import HighlightItem, LineItem, TextBoxItem
+from litho.canvas.items import FreehandItem, HighlightItem, LineItem, TextBoxItem
 
 
 def _active_scene(qtbot):
@@ -78,6 +78,39 @@ def test_line_item_bounding_rect_is_padded_for_arrowheads(qapp):
     arrow = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
 
     assert arrow.boundingRect().width() > plain.boundingRect().width()
+
+
+def test_freehand_item_starts_path_at_first_point(qapp):
+    item = FreehandItem(QPointF(5, 5), QColor("#8fb8ff"), width=4)
+
+    assert item.path().elementAt(0).x == 5
+    assert item.path().elementAt(0).y == 5
+
+
+def test_freehand_item_is_selectable_and_movable(qapp):
+    item = FreehandItem(QPointF(0, 0), QColor("#8fb8ff"), width=4)
+
+    assert item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+    assert item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsMovable
+
+
+def test_freehand_item_add_point_extends_the_path(qapp):
+    item = FreehandItem(QPointF(0, 0), QColor("#8fb8ff"), width=4)
+
+    item.add_point(QPointF(10, 0))
+    item.add_point(QPointF(10, 10))
+
+    assert item.path().elementCount() == 3
+    last = item.path().elementAt(2)
+    assert (last.x, last.y) == (10, 10)
+
+
+def test_freehand_item_set_color_updates_pen(qapp):
+    item = FreehandItem(QPointF(0, 0), QColor("#8fb8ff"), width=4)
+
+    item.set_color(QColor("#f5c451"))
+
+    assert item.pen().color() == QColor("#f5c451")
 
 
 def test_text_box_item_stores_position(qapp):

@@ -10,10 +10,11 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import Qt, QLineF, QPointF, QRectF
-from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QGraphicsItem,
     QGraphicsLineItem,
+    QGraphicsPathItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
 )
@@ -97,6 +98,40 @@ class LineItem(QGraphicsLineItem):
         left = tip - QPointF(math.cos(angle - spread), math.sin(angle - spread)) * self.ARROW_LENGTH
         right = tip - QPointF(math.cos(angle + spread), math.sin(angle + spread)) * self.ARROW_LENGTH
         return QPolygonF([tip, left, right])
+
+
+class FreehandItem(QGraphicsPathItem):
+    """A freehand stroke traced by dragging the mouse. The path is built
+    point by point as the drag continues; selection is drawn for free by
+    Qt since this subclasses a standard graphics item.
+    """
+
+    def __init__(self, start: QPointF, color: QColor, width: int) -> None:
+        super().__init__()
+        # QGraphicsPathItem(path) silently drops the path in this PySide6
+        # version — setPath() after construction is the reliable path.
+        self.setPath(QPainterPath(start))
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.setPen(
+            QPen(
+                color,
+                width,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+
+    def set_color(self, color: QColor) -> None:
+        pen = self.pen()
+        pen.setColor(color)
+        self.setPen(pen)
+
+    def add_point(self, point: QPointF) -> None:
+        path = self.path()
+        path.lineTo(point)
+        self.setPath(path)
 
 
 class TextBoxItem(QGraphicsTextItem):

@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QApplication
 
 from litho.canvas.items import TextBoxItem
 from litho.main_window import MainWindow
+from litho.tools.freehand import FreehandTool
 from litho.tools.highlighter import HighlighterTool
 from litho.tools.line import LineTool
 from litho.tools.select import SelectTool
@@ -48,11 +49,10 @@ def test_unimplemented_tool_actions_are_disabled(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
-    for action in (window.action_polygon, window.action_freehand):
-        assert not action.isEnabled()
+    assert not window.action_polygon.isEnabled()
 
 
-def test_line_and_text_tool_actions_are_enabled(qtbot):
+def test_line_text_and_freehand_tool_actions_are_enabled(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
@@ -61,6 +61,7 @@ def test_line_and_text_tool_actions_are_enabled(qtbot):
         window.action_arrow,
         window.action_double_arrow,
         window.action_text,
+        window.action_freehand,
     ):
         assert action.isEnabled()
 
@@ -172,6 +173,15 @@ def test_choosing_arrow_switches_the_active_tool(qtbot):
 
     assert isinstance(window.view._active_tool, LineTool)
     assert window.view._active_tool.head_style == "end"
+
+
+def test_choosing_freehand_switches_the_active_tool(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_freehand.trigger()
+
+    assert isinstance(window.view._active_tool, FreehandTool)
 
 
 def test_choosing_text_switches_the_active_tool(qtbot):

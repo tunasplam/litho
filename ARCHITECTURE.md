@@ -6,21 +6,17 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-22` — Text box tool is live. `TextBoxItem` (canvas/items.py)
-subclasses `QGraphicsTextItem`; `tools/text.py`'s `TextTool` places one on
-click and puts it straight into edit mode. Editing in place — cursor
-placement, drag-select, Backspace, click-away/Esc to commit — needed a
-routing change in `CanvasView` (`_is_editing_text()`): while a text item
-has edit focus, mouse and key events now bypass whatever tool is active
-and go through Qt's normal item dispatch instead, and Delete/Backspace
-only deletes the selection when nothing is being edited. An empty box
-committed with nothing typed into it removes itself rather than leaving a
-stray invisible item behind. You can open an image, draw a highlight, a
-line/arrow/double-arrow, place and edit text, switch to Select, move any
-of them, and press Delete to remove it. Polygon and Freehand actions
-remain present but disabled — not implemented yet. Next step:
-`tools/freehand.py` is probably the simplest of the two — drag-to-draw
-path, no vertex/click-to-close complexity.
+`2026-07-22` — Freehand tool is live, on top of this morning's text box
+work. `FreehandItem` (canvas/items.py) subclasses `QGraphicsPathItem`;
+`tools/freehand.py`'s `FreehandTool` starts a path on press and calls
+`add_point()` on every subsequent move, same drag lifecycle as the
+Highlighter tool. You can open an image, draw a highlight, a
+line/arrow/double-arrow, a freehand stroke, place and edit text, switch
+to Select, move any of them, and press Delete to remove it. Only Polygon
+remains present but disabled — not implemented yet. Next step: Polygon
+(click-to-place-vertex, double-click/Enter to close) is the last drawing
+tool, then `commands.py` (undo/redo) and `io.py` (save/export) are what's
+left before the app is functionally complete.
 
 ---
 
@@ -184,12 +180,12 @@ litho`, and committed on its own before moving to the next.
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
-| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`, `TextBoxItem`. Polygon/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
+| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`, `TextBoxItem`, `FreehandItem`. Polygon item follows the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
 | `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. |
 | `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
 | `tools/polygon.py` | Not started | |
 | `tools/line.py` | Done | One `LineTool`/`LineItem` pair, instantiated three times (Line/Arrow/Double-arrow) with different `head_style` values. |
-| `tools/freehand.py` | Not started | |
+| `tools/freehand.py` | Done | Drag-to-draw `FreehandItem` (`QGraphicsPathItem`); `on_press` starts the path, `on_move` appends a point per event via `add_point()`. |
 | `tools/highlighter.py` | Done | Drag-to-draw `HighlightItem`; always translucent (`BASE_OPACITY = 0.4`) scaled further by the Opacity control — a highlighter that isn't translucent by default isn't very useful. |
 | `tools/text.py` | Done | Click places a `TextBoxItem` and immediately calls `enter_edit_mode()`. Re-editing an existing box (double-click), cursor placement/selection, and click-away/Esc-to-commit all rely on `CanvasView._is_editing_text()` handing events to Qt's native item dispatch instead of the active tool. |
 | `commands.py` (undo/redo) | Not started | |
@@ -307,6 +303,12 @@ litho`, and committed on its own before moving to the next.
   behind. Otherwise a click that isn't followed by typing leaves an
   invisible-but-selectable/movable item on the canvas — confusing on
   later Select-tool interaction.
+- **2026-07-22** — `FreehandItem` subclasses `QGraphicsPathItem` rather
+  than sampling points into a polygon/line list itself: `QPainterPath`
+  already accumulates `lineTo()` segments and Qt derives bounding
+  rect/selection outline/hit-testing from it for free, same reasoning as
+  every other item here subclassing a standard graphics item instead of
+  a bare `QGraphicsItem`.
 
 ---
 
