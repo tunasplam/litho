@@ -28,6 +28,7 @@ from litho.tools.base import Style, Tool
 from litho.tools.highlighter import HighlighterTool
 from litho.tools.line import LineTool
 from litho.tools.select import SelectTool
+from litho.tools.text import TextTool
 
 WINDOW_TITLE = "Litho"
 DEFAULT_WINDOW_SIZE = (1200, 800)
@@ -116,7 +117,6 @@ class MainWindow(QMainWindow):
         for action in (
             self.action_polygon,
             self.action_freehand,
-            self.action_text,
         ):
             action.setEnabled(False)
 
@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
             self.action_double_arrow: LineTool(
                 self.view, self.style, head_style=LineItem.HEAD_BOTH
             ),
+            self.action_text: TextTool(self.view, self.style),
         }
         self.tool_group.triggered.connect(self._on_tool_changed)
         self.view.set_tool(self.tools[self.action_select])

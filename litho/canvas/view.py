@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QGraphicsView
+from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsView
 
 from litho.canvas.scene import CanvasScene
 
@@ -71,26 +71,41 @@ class CanvasView(QGraphicsView):
         if tool is not None:
             tool.activate()
 
+    def _is_editing_text(self) -> bool:
+        """True while a text item is mid-edit — in that state, mouse/key
+        input needs to reach the item itself (cursor placement, text
+        selection, Backspace-to-delete-a-character, click-away-to-commit)
+        instead of being intercepted by whatever tool is active.
+        """
+        scene = self.scene()
+        if scene is None:
+            return False
+        focus_item = scene.focusItem()
+        return (
+            isinstance(focus_item, QGraphicsTextItem)
+            and focus_item.textInteractionFlags() != Qt.TextInteractionFlag.NoTextInteraction
+        )
+
     def mousePressEvent(self, event) -> None:
-        if self._active_tool is None or not self._active_tool.handles_own_events:
+        if self._is_editing_text() or self._active_tool is None or not self._active_tool.handles_own_events:
             super().mousePressEvent(event)
             return
         self._active_tool.on_press(self.mapToScene(event.position().toPoint()))
 
     def mouseMoveEvent(self, event) -> None:
-        if self._active_tool is None or not self._active_tool.handles_own_events:
+        if self._is_editing_text() or self._active_tool is None or not self._active_tool.handles_own_events:
             super().mouseMoveEvent(event)
             return
         self._active_tool.on_move(self.mapToScene(event.position().toPoint()))
 
     def mouseReleaseEvent(self, event) -> None:
-        if self._active_tool is None or not self._active_tool.handles_own_events:
+        if self._is_editing_text() or self._active_tool is None or not self._active_tool.handles_own_events:
             super().mouseReleaseEvent(event)
             return
         self._active_tool.on_release(self.mapToScene(event.position().toPoint()))
 
     def keyPressEvent(self, event) -> None:
-        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+        if not self._is_editing_text() and event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             self._delete_selected_items()
             return
         super().keyPressEvent(event)

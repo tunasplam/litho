@@ -11,7 +11,12 @@ import math
 
 from PySide6.QtCore import Qt, QLineF, QPointF, QRectF
 from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsLineItem, QGraphicsRectItem
+from PySide6.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsLineItem,
+    QGraphicsRectItem,
+    QGraphicsTextItem,
+)
 
 
 class HighlightItem(QGraphicsRectItem):
@@ -92,3 +97,56 @@ class LineItem(QGraphicsLineItem):
         left = tip - QPointF(math.cos(angle - spread), math.sin(angle - spread)) * self.ARROW_LENGTH
         right = tip - QPointF(math.cos(angle + spread), math.sin(angle + spread)) * self.ARROW_LENGTH
         return QPolygonF([tip, left, right])
+
+
+class TextBoxItem(QGraphicsTextItem):
+    """An in-place editable text annotation. Starts non-interactive (so it
+    moves/selects like every other item); double-click switches it into
+    `TextEditorInteraction` for typing, and losing focus — click away, Esc,
+    or committing — switches it back. See tools/text.py for how new ones
+    get placed.
+    """
+
+    def __init__(self, pos: QPointF, color: QColor, font_size: int) -> None:
+        super().__init__()
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.setPos(pos)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self.set_color(color)
+        self.set_font_size(font_size)
+
+    def set_color(self, color: QColor) -> None:
+        self.setDefaultTextColor(color)
+
+    def set_font_size(self, size: int) -> None:
+        font = self.font()
+        font.setPointSize(size)
+        self.setFont(font)
+
+    def enter_edit_mode(self) -> None:
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if self.textInteractionFlags() == Qt.TextInteractionFlag.NoTextInteraction:
+            self.enter_edit_mode()
+        super().mouseDoubleClickEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        cursor = self.textCursor()
+        cursor.clearSelection()
+        self.setTextCursor(cursor)
+        # An empty box committed with nothing typed into it is just a
+        # stray, invisible-but-clickable item — drop it instead of
+        # leaving it behind.
+        if not self.toPlainText() and self.scene() is not None:
+            self.scene().removeItem(self)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.clearFocus()
+            return
+        super().keyPressEvent(event)

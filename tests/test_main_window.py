@@ -1,10 +1,13 @@
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtWidgets import QApplication
 
+from litho.canvas.items import TextBoxItem
 from litho.main_window import MainWindow
 from litho.tools.highlighter import HighlighterTool
 from litho.tools.line import LineTool
 from litho.tools.select import SelectTool
+from litho.tools.text import TextTool
 
 
 def test_window_title(qtbot):
@@ -45,19 +48,20 @@ def test_unimplemented_tool_actions_are_disabled(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
-    for action in (
-        window.action_polygon,
-        window.action_freehand,
-        window.action_text,
-    ):
+    for action in (window.action_polygon, window.action_freehand):
         assert not action.isEnabled()
 
 
-def test_line_tool_actions_are_enabled(qtbot):
+def test_line_and_text_tool_actions_are_enabled(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
 
-    for action in (window.action_line, window.action_arrow, window.action_double_arrow):
+    for action in (
+        window.action_line,
+        window.action_arrow,
+        window.action_double_arrow,
+        window.action_text,
+    ):
         assert action.isEnabled()
 
 
@@ -168,6 +172,32 @@ def test_choosing_arrow_switches_the_active_tool(qtbot):
 
     assert isinstance(window.view._active_tool, LineTool)
     assert window.view._active_tool.head_style == "end"
+
+
+def test_choosing_text_switches_the_active_tool(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_text.trigger()
+
+    assert isinstance(window.view._active_tool, TextTool)
+
+
+def test_clicking_with_text_tool_starts_an_editable_text_item(qtbot, tmp_path):
+    image_path = tmp_path / "sample.png"
+    QPixmap(200, 200).save(str(image_path))
+    window = MainWindow(initial_image=str(image_path))
+    qtbot.addWidget(window)
+    window.show()
+    QApplication.instance().processEvents()
+
+    window.action_text.trigger()
+    tool = window.view._active_tool
+    tool.on_press(tool.view.mapToScene(20, 20))
+
+    item = next(i for i in window.scene.items() if isinstance(i, TextBoxItem))
+    assert window.scene.focusItem() is item
+    assert window.view._is_editing_text()
 
 
 def test_picking_a_new_stroke_color_updates_style_and_swatch(qtbot, monkeypatch):

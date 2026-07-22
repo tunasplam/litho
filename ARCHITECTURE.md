@@ -6,17 +6,21 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-21` — Line, Arrow, and Double-arrow tools are live, on top of the
-existing Highlighter/Select pipeline. One `LineItem` (canvas/items.py)
-covers all three toolbar actions via a `head_style` flag (`"none"`,
-`"end"`, `"both"`); `tools/line.py`'s `LineTool` is instantiated three
-times in `main_window.py`, once per head style. You can open an image,
-draw a highlight, a plain line, an arrow, or a double-headed arrow,
-switch to Select, move any of them, and press Delete to remove it.
-Polygon, Freehand, and Text-box actions remain present but disabled —
-not implemented yet. Next step: pick one (`tools/freehand.py` is
-probably the simplest — drag-to-draw path, no vertex/click-to-close
-complexity) and repeat the pattern.
+`2026-07-22` — Text box tool is live. `TextBoxItem` (canvas/items.py)
+subclasses `QGraphicsTextItem`; `tools/text.py`'s `TextTool` places one on
+click and puts it straight into edit mode. Editing in place — cursor
+placement, drag-select, Backspace, click-away/Esc to commit — needed a
+routing change in `CanvasView` (`_is_editing_text()`): while a text item
+has edit focus, mouse and key events now bypass whatever tool is active
+and go through Qt's normal item dispatch instead, and Delete/Backspace
+only deletes the selection when nothing is being edited. An empty box
+committed with nothing typed into it removes itself rather than leaving a
+stray invisible item behind. You can open an image, draw a highlight, a
+line/arrow/double-arrow, place and edit text, switch to Select, move any
+of them, and press Delete to remove it. Polygon and Freehand actions
+remain present but disabled — not implemented yet. Next step:
+`tools/freehand.py` is probably the simplest of the two — drag-to-draw
+path, no vertex/click-to-close complexity.
 
 ---
 
@@ -180,14 +184,14 @@ litho`, and committed on its own before moving to the next.
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
-| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`. Polygon/Text/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
+| `canvas/items.py` | Partial | `HighlightItem`, `LineItem`, `TextBoxItem`. Polygon/Freehand items follow the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
 | `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. |
 | `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
 | `tools/polygon.py` | Not started | |
 | `tools/line.py` | Done | One `LineTool`/`LineItem` pair, instantiated three times (Line/Arrow/Double-arrow) with different `head_style` values. |
 | `tools/freehand.py` | Not started | |
 | `tools/highlighter.py` | Done | Drag-to-draw `HighlightItem`; always translucent (`BASE_OPACITY = 0.4`) scaled further by the Opacity control — a highlighter that isn't translucent by default isn't very useful. |
-| `tools/text.py` | Not started | |
+| `tools/text.py` | Done | Click places a `TextBoxItem` and immediately calls `enter_edit_mode()`. Re-editing an existing box (double-click), cursor placement/selection, and click-away/Esc-to-commit all rely on `CanvasView._is_editing_text()` handing events to Qt's native item dispatch instead of the active tool. |
 | `commands.py` (undo/redo) | Not started | |
 | `io.py` (open/save/convert) | Not started | |
 | `icons.py` | Not started | |
@@ -278,6 +282,31 @@ litho`, and committed on its own before moving to the next.
   on top and `boundingRect()` to pad for them (only when a head is
   actually drawn, so plain lines don't get an oversized hit/repaint
   region for arrowheads they'll never have).
+- **2026-07-22** — `TextBoxItem` subclasses `QGraphicsTextItem` directly
+  rather than wrapping a separate edit widget: it starts with
+  `NoTextInteraction` (so it moves/selects like every other item) and
+  switches to `TextEditorInteraction` on double-click or on creation via
+  `TextTool`, switching back on `focusOutEvent`. This meant `CanvasView`
+  needed a new rule — while a text item holds edit focus
+  (`_is_editing_text()`), mouse and key events skip the active tool and
+  go through Qt's default handling instead, since e.g. the Highlighter or
+  Text tool would otherwise swallow every click (including the clicks
+  needed to place a cursor or drag-select text) before Qt's own item
+  dispatch ever saw them. The same check gates
+  `CanvasView.keyPressEvent`'s Delete/Backspace handling, since Backspace
+  is also "delete a character" while editing.
+- **2026-07-22** — "Click away to commit" is deliberately *just* a commit,
+  not also a placement gesture: clicking outside the box you're editing
+  falls through to Qt's default handling (which clears focus off the text
+  item, triggering the commit), rather than `TextTool` creating a second
+  box at that point. Placing another box after that takes a second,
+  separate click. This avoids a click racing an in-flight commit and
+  spawning two live text items on the same click.
+- **2026-07-22** — Committing an empty `TextBoxItem` (focus lost with no
+  text ever typed in) removes it from the scene rather than leaving it
+  behind. Otherwise a click that isn't followed by typing leaves an
+  invisible-but-selectable/movable item on the canvas — confusing on
+  later Select-tool interaction.
 
 ---
 
