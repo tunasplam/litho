@@ -19,6 +19,24 @@ def test_window_title(qtbot):
     assert window.windowTitle() == "Litho"
 
 
+def test_tool_actions_have_icons_and_keep_their_text_as_a_tooltip(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    for action, label in (
+        (window.action_select, "Select"),
+        (window.action_rectangle, "Rectangle"),
+        (window.action_line, "Line"),
+        (window.action_arrow, "Arrow"),
+        (window.action_double_arrow, "Double arrow"),
+        (window.action_freehand, "Freehand"),
+        (window.action_highlighter, "Highlighter"),
+        (window.action_text, "Text box"),
+    ):
+        assert not action.icon().isNull()
+        assert action.text() == label
+
+
 def test_select_tool_is_active_by_default(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)

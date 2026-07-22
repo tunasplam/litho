@@ -6,23 +6,30 @@ adjust their color/size/opacity, and save/export back out (with format
 conversion between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-22` — Rectangle tool added, replacing Polygon's toolbar slot —
-Polygon was dropped from scope (Freehand/Line/Rectangle already cover the
-need, per direct feedback). `RectangleItem` (canvas/items.py) is an
-unfilled `QGraphicsRectItem` (`NoBrush`); `tools/rectangle.py`'s
-`RectangleTool` drags it out the same way `HighlighterTool` drags out a
-`HighlightItem`, but reads Stroke (border color) + Size (border
-thickness) instead of Fill — `uses_fill = False`. Every drawing tool is
-now implemented: Select, Rectangle, Line/Arrow/Double-arrow, Freehand,
-Highlighter, Text box. All support move/select/delete. Two known,
-unfixed inconsistencies from an earlier style-control audit: arrowheads
-fill with the Stroke color despite being a filled shape, and
-Highlighter's Opacity is capped at a 0.4× multiplier while every other
-tool applies it directly. Next: `commands.py` (undo/redo), then `io.py`
-(save/export) — those are the two remaining pieces before the app is
-functionally complete end to end. Full session-by-session history has
-moved to §8 (Decisions log) to keep this snapshot short — read that for
-the reasoning behind any specific past choice.
+`2026-07-22` — `icons.py` (previously "Not started") now exists: the tool
+row's actions render icons instead of text (Qt's default
+`ToolButtonIconOnly` style — the action's text is kept, so it still shows
+as a hover tooltip). Icons are drawn programmatically with `QPainter`
+rather than shipped as image assets — no icon-library dependency, no
+files to keep in sync with the toolbar, and each is recolored from
+`QApplication.palette()`'s `WindowText` role at build time so they read
+correctly against both light and dark styles. Also added the Rectangle
+tool this session, replacing Polygon's toolbar slot — Polygon was dropped
+from scope entirely (Freehand/Line/Rectangle already cover the need, per
+direct feedback). `RectangleItem` (canvas/items.py) is an unfilled
+`QGraphicsRectItem` (`NoBrush`); `tools/rectangle.py`'s `RectangleTool`
+drags it out the same way `HighlighterTool` drags out a `HighlightItem`,
+but reads Stroke (border color) + Size (border thickness) instead of
+Fill. Every drawing tool is now implemented: Select, Rectangle,
+Line/Arrow/Double-arrow, Freehand, Highlighter, Text box — all with an
+icon, all supporting move/select/delete. Two known, unfixed
+inconsistencies from an earlier style-control audit: arrowheads fill with
+the Stroke color despite being a filled shape, and Highlighter's Opacity
+is capped at a 0.4× multiplier while every other tool applies it
+directly. Next: `commands.py` (undo/redo), then `io.py` (save/export) —
+the two remaining pieces before the app is functionally complete end to
+end. Full session-by-session history lives in §8 (Decisions log) — read
+that for the reasoning behind any specific past choice.
 
 ---
 
@@ -126,7 +133,7 @@ litho/
 │   │
 │   ├── commands.py           # QUndoCommand subclasses — powers undo/redo
 │   ├── io.py                 # open/save, format conversion, flatten annotations on export
-│   └── icons.py              # toolbar icons (from the mockup SVGs)
+│   └── icons.py              # toolbar icons — drawn with QPainter, not asset files
 │
 └── tests/                    # actual test files are named test_canvas_items.py,
     ├── test_canvas_items.py  # test_tools_<name>.py, etc. — see the repo for
@@ -177,7 +184,7 @@ litho`, and committed on its own before moving to the next.
 |---|---|---|
 | Project scaffold (`uv init`) | Done | Flat `main.py`, now a thin shim into `litho.__main__`. |
 | Package skeleton (`litho/` package, `__main__.py`) | Done | |
-| `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
+| `main_window.py` + toolbars | Done | Both toolbar rows laid out and tested; row 2's tool actions are icon-only (text kept as tooltip). |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
 | `canvas/items.py` | Done | `HighlightItem`, `RectangleItem`, `LineItem`, `TextBoxItem`, `FreehandItem` — every drawing tool has a backing item now. |
 | `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. `Tool` also declares `uses_stroke`/`uses_fill`/`uses_size`/`uses_opacity` (default all `True`), which each subclass narrows to what it actually reads — drives which toolbar controls `main_window.py` greys out per active tool. |
@@ -189,7 +196,7 @@ litho`, and committed on its own before moving to the next.
 | `tools/text.py` | Done | Click places a `TextBoxItem` and immediately calls `enter_edit_mode()`. Re-editing an existing box (double-click), cursor placement/selection, and click-away/Esc-to-commit all rely on `CanvasView._is_editing_text()` handing events to Qt's native item dispatch instead of the active tool. |
 | `commands.py` (undo/redo) | Not started | |
 | `io.py` (open/save/convert) | Not started | |
-| `icons.py` | Not started | |
+| `icons.py` | Done | One function per tool action, each drawing a small pictogram with `QPainter` (dashed rect for Select, solid rect for Rectangle, line/arrow/double-arrow, a squiggle for Freehand, a chisel-tip marker for Highlighter, a bold "T" for Text). Recolors from `QApplication.palette()` at build time rather than being baked into fixed-color pixmaps. |
 | CLI image argument (`litho <path>`) | Done | `litho/__main__.py:parse_args`; `MainWindow(initial_image=...)` and `open_image_from_path()` shared with the Open action. |
 | Test scaffold (`conftest.py`, fixtures) | Partial | `test_main_window.py` in place, using pytest-qt's built-in `qtbot`/`qapp` fixtures directly — no hand-rolled `conftest.py` needed yet. Will add one once tests need shared fixtures (e.g. sample images for `io.py`). |
 | Packaging (PyInstaller/Nuitka) | Not started | Deferred until the app works end to end. |
@@ -398,6 +405,29 @@ litho`, and committed on its own before moving to the next.
   intentional, not an oversight: a highlight/selection-style rectangle
   reads as a rectangle because its corners are sharp; a rounded join
   would make it look like a rounded-rect, a different shape.
+- **2026-07-22** — Tool-row icons (`icons.py`) are drawn with `QPainter`
+  at startup rather than shipped as SVG/PNG assets, despite §4's original
+  target layout comment suggesting "from the mockup SVGs" — no mockup
+  file ever landed in the repo, and hand-drawn pictograms avoid adding an
+  icon-asset pipeline (files to store, a naming convention, keeping them
+  in sync with whatever `main_window.py` wires up) for a toolbar with
+  eight buttons. Each icon function reads
+  `QApplication.palette().color(QPalette.ColorRole.WindowText)` at build
+  time instead of hardcoding a color, so they follow the active Qt style
+  (light/dark) the same way native-drawn widgets already do — same
+  reasoning as `HighlightItem`/`LineItem`/etc. subclassing standard
+  `QGraphicsItem` types to get free behavior rather than reimplementing
+  it. `_add_tool_action` keeps each action's text set (`toolbar.addAction(icon,
+  label)`) alongside the icon — Qt's default `ToolButtonIconOnly` style
+  hides it from the toolbar button itself, but it's what still shows up
+  as the hover tooltip, so nothing about "what does this button do" was
+  lost by switching from text to icons.
+- **2026-07-22** — Chose a dashed rectangle for the Select tool's icon
+  over a generic cursor/pointer glyph: `SelectTool` doesn't do anything
+  novel of its own (see its class docstring) — it just puts the view into
+  Qt's native rubber-band drag mode — so the icon shows literally what
+  the tool does (drag out a selection marquee) rather than a generic
+  "this is the default tool" pointer icon.
 
 ---
 

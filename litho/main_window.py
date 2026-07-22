@@ -7,7 +7,7 @@ tools read from when they create new items.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup, QColor, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from litho import icons
 from litho.canvas.items import LineItem
 from litho.canvas.scene import CanvasScene
 from litho.canvas.view import CanvasView
@@ -104,14 +105,18 @@ class MainWindow(QMainWindow):
         self.tool_group = QActionGroup(self)
         self.tool_group.setExclusive(True)
 
-        self.action_select = self._add_tool_action(toolbar, "Select")
-        self.action_rectangle = self._add_tool_action(toolbar, "Rectangle")
-        self.action_line = self._add_tool_action(toolbar, "Line")
-        self.action_arrow = self._add_tool_action(toolbar, "Arrow")
-        self.action_double_arrow = self._add_tool_action(toolbar, "Double arrow")
-        self.action_freehand = self._add_tool_action(toolbar, "Freehand")
-        self.action_highlighter = self._add_tool_action(toolbar, "Highlighter")
-        self.action_text = self._add_tool_action(toolbar, "Text box")
+        self.action_select = self._add_tool_action(toolbar, "Select", icons.select_icon())
+        self.action_rectangle = self._add_tool_action(toolbar, "Rectangle", icons.rectangle_icon())
+        self.action_line = self._add_tool_action(toolbar, "Line", icons.line_icon())
+        self.action_arrow = self._add_tool_action(toolbar, "Arrow", icons.arrow_icon())
+        self.action_double_arrow = self._add_tool_action(
+            toolbar, "Double arrow", icons.double_arrow_icon()
+        )
+        self.action_freehand = self._add_tool_action(toolbar, "Freehand", icons.freehand_icon())
+        self.action_highlighter = self._add_tool_action(
+            toolbar, "Highlighter", icons.highlighter_icon()
+        )
+        self.action_text = self._add_tool_action(toolbar, "Text box", icons.text_icon())
 
         self.action_select.setChecked(True)
 
@@ -143,8 +148,11 @@ class MainWindow(QMainWindow):
 
         self.addToolBar(toolbar)
 
-    def _add_tool_action(self, toolbar: QToolBar, label: str) -> QAction:
-        action = toolbar.addAction(label)
+    def _add_tool_action(self, toolbar: QToolBar, label: str, icon: QIcon) -> QAction:
+        # Icon-only on the toolbar (Qt's default ToolButtonIconOnly style);
+        # the text is kept as the action's name so it still shows up as a
+        # tooltip on hover.
+        action = toolbar.addAction(icon, label)
         action.setCheckable(True)
         self.tool_group.addAction(action)
         return action
