@@ -61,3 +61,12 @@ def test_release_clears_in_progress_state(qtbot):
 
     assert tool._item is None
     assert tool._origin is None
+
+
+def test_line_tool_does_not_use_fill(qtbot):
+    tool, scene = _tool(qtbot)
+
+    assert not tool.uses_fill
+    assert tool.uses_stroke
+    assert tool.uses_size
+    assert tool.uses_opacity

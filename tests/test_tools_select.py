@@ -29,3 +29,13 @@ def test_activating_select_tool_enables_rubber_band_drag(qtbot):
     tool.activate()
 
     assert view.dragMode() == QGraphicsView.DragMode.RubberBandDrag
+
+
+def test_select_tool_uses_none_of_the_style_controls(qtbot):
+    view, style = _view_and_style(qtbot)
+    tool = SelectTool(view, style)
+
+    assert not tool.uses_stroke
+    assert not tool.uses_fill
+    assert not tool.uses_size
+    assert not tool.uses_opacity

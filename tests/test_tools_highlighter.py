@@ -53,3 +53,12 @@ def test_release_clears_in_progress_state(qtbot):
 
     assert tool._item is None
     assert tool._origin is None
+
+
+def test_highlighter_does_not_use_stroke_or_size(qtbot):
+    tool, scene = _tool(qtbot)
+
+    assert not tool.uses_stroke
+    assert not tool.uses_size
+    assert tool.uses_fill
+    assert tool.uses_opacity

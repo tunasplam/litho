@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QGraphicsPathItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
+    QStyle,
 )
 
 
@@ -48,8 +49,20 @@ class LineItem(QGraphicsLineItem):
     HEAD_END = "end"
     HEAD_BOTH = "both"
 
-    ARROW_LENGTH = 14
+    # Arrowheads scale with pen width — a fixed size gets swallowed by a
+    # thick enough line — with a floor so thin lines still get a visible
+    # head. At this spread angle, a `length` head is roughly `3 * width`
+    # wide at the base, comfortably past the line's own thickness.
+    ARROW_LENGTH_MIN = 14
+    ARROW_LENGTH_SCALE = 3.0
     ARROW_SPREAD_DEGREES = 25
+
+    # The shaft is cut exactly at the arrowhead's base edge, but two
+    # separately-painted shapes meeting at an exact seam still leaves a
+    # hairline anti-aliasing gap between them. Extending the shaft this
+    # much further, into the head, guarantees a pixel or two of overlap
+    # instead.
+    ARROW_SHAFT_OVERLAP = 1.5
 
     def __init__(
         self, line: QLineF, color: QColor, width: int, head_style: str = HEAD_NONE
@@ -58,12 +71,22 @@ class LineItem(QGraphicsLineItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         self.head_style = head_style
+        # A round cap on an arrow's shaft bulges out past the arrowhead's
+        # sharp tip and past its straight base edge — flat reads clean
+        # against both. (Qt's "SquareCap" is a false friend here: despite
+        # the name it still extends half the pen width past the endpoint,
+        # same as RoundCap's bounding box but square-shaped: FlatCap is
+        # the one that actually terminates exactly at the endpoint.)
+        # Plain lines (no head) keep the round cap.
+        cap_style = (
+            Qt.PenCapStyle.RoundCap if head_style == self.HEAD_NONE else Qt.PenCapStyle.FlatCap
+        )
         self.setPen(
             QPen(
                 color,
                 width,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap_style,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -73,30 +96,76 @@ class LineItem(QGraphicsLineItem):
         pen.setColor(color)
         self.setPen(pen)
 
+    @property
+    def _arrow_length(self) -> float:
+        return max(self.ARROW_LENGTH_MIN, self.pen().widthF() * self.ARROW_LENGTH_SCALE)
+
+    @property
+    def _arrow_base_distance(self) -> float:
+        # Distance from the tip to the arrowhead's flat base edge (as
+        # opposed to `_arrow_length`, the distance to its two side
+        # corners) — this is where the shaft needs to stop so it doesn't
+        # run into the head it's supposed to terminate under.
+        return self._arrow_length * math.cos(math.radians(self.ARROW_SPREAD_DEGREES))
+
     def boundingRect(self) -> QRectF:
         # The base line's bounding rect only accounts for pen width, not
         # the arrowheads that can stick out past either endpoint.
         if self.head_style == self.HEAD_NONE:
             return super().boundingRect()
-        extra = self.ARROW_LENGTH + self.pen().widthF()
+        extra = self._arrow_length + self.pen().widthF()
         return super().boundingRect().adjusted(-extra, -extra, extra, extra)
 
     def paint(self, painter, option, widget=None) -> None:
-        super().paint(painter, option, widget)
         if self.head_style == self.HEAD_NONE:
+            super().paint(painter, option, widget)
             return
+        # Custom-painted rather than delegating to QGraphicsLineItem's
+        # paint(): the shaft has to stop at the arrowhead's base instead
+        # of running under it, otherwise (especially at low opacity) the
+        # overlap between shaft and head reads as a visible seam right at
+        # the base, and a round cap pokes out past the head's sharp tip.
+        painter.setPen(self.pen())
+        painter.drawLine(self._shaft_line())
         painter.setBrush(QBrush(self.pen().color()))
         painter.setPen(Qt.PenStyle.NoPen)
         line = self.line()
         painter.drawPolygon(self._arrowhead(line.p2(), line.p1()))
         if self.head_style == self.HEAD_BOTH:
             painter.drawPolygon(self._arrowhead(line.p1(), line.p2()))
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(option.palette.windowText(), 0, Qt.PenStyle.DashLine))
+            painter.drawRect(self.boundingRect())
+
+    def _shaft_line(self) -> QLineF:
+        """The line as actually drawn under the arrowhead(s) — shortened
+        at whichever end(s) get a head so the stroke terminates at the
+        head's base rather than running to the tip.
+        """
+        line = self.line()
+        p1, p2 = line.p1(), line.p2()
+        base = max(0.0, self._arrow_base_distance - self.ARROW_SHAFT_OVERLAP)
+        if self.head_style in (self.HEAD_END, self.HEAD_BOTH):
+            p2 = self._point_toward(p2, p1, base)
+        if self.head_style == self.HEAD_BOTH:
+            p1 = self._point_toward(p1, line.p2(), base)
+        return QLineF(p1, p2)
+
+    @staticmethod
+    def _point_toward(origin: QPointF, other: QPointF, distance: float) -> QPointF:
+        vector = other - origin
+        vector_length = math.hypot(vector.x(), vector.y())
+        if vector_length == 0:
+            return origin
+        return origin + vector * (distance / vector_length)
 
     def _arrowhead(self, tip: QPointF, tail: QPointF) -> QPolygonF:
         angle = math.atan2(tip.y() - tail.y(), tip.x() - tail.x())
         spread = math.radians(self.ARROW_SPREAD_DEGREES)
-        left = tip - QPointF(math.cos(angle - spread), math.sin(angle - spread)) * self.ARROW_LENGTH
-        right = tip - QPointF(math.cos(angle + spread), math.sin(angle + spread)) * self.ARROW_LENGTH
+        length = self._arrow_length
+        left = tip - QPointF(math.cos(angle - spread), math.sin(angle - spread)) * length
+        right = tip - QPointF(math.cos(angle + spread), math.sin(angle + spread)) * length
         return QPolygonF([tip, left, right])
 
 

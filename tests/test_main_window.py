@@ -210,6 +210,73 @@ def test_clicking_with_text_tool_starts_an_editable_text_item(qtbot, tmp_path):
     assert window.view._is_editing_text()
 
 
+def test_select_tool_disables_all_style_controls(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    for control in (window.stroke_swatch, window.fill_swatch, window.size_spin, window.opacity_spin):
+        assert not control.isEnabled()
+
+
+def test_highlighter_disables_stroke_and_size_only(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_highlighter.trigger()
+
+    assert not window.stroke_swatch.isEnabled()
+    assert not window.size_spin.isEnabled()
+    assert window.fill_swatch.isEnabled()
+    assert window.opacity_spin.isEnabled()
+
+
+def test_line_tool_disables_fill_only(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_line.trigger()
+
+    assert not window.fill_swatch.isEnabled()
+    assert window.stroke_swatch.isEnabled()
+    assert window.size_spin.isEnabled()
+    assert window.opacity_spin.isEnabled()
+
+
+def test_text_tool_disables_fill_only(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_text.trigger()
+
+    assert not window.fill_swatch.isEnabled()
+    assert window.stroke_swatch.isEnabled()
+    assert window.size_spin.isEnabled()
+    assert window.opacity_spin.isEnabled()
+
+
+def test_style_control_labels_are_disabled_alongside_their_controls(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_highlighter.trigger()
+
+    assert not window.stroke_label.isEnabled()
+    assert not window.size_label.isEnabled()
+    assert window.fill_label.isEnabled()
+    assert window.opacity_label.isEnabled()
+
+
+def test_switching_back_to_select_re_disables_all_controls(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window.action_highlighter.trigger()
+    window.action_select.trigger()
+
+    for control in (window.stroke_swatch, window.fill_swatch, window.size_spin, window.opacity_spin):
+        assert not control.isEnabled()
+
+
 def test_picking_a_new_stroke_color_updates_style_and_swatch(qtbot, monkeypatch):
     window = MainWindow()
     qtbot.addWidget(window)

@@ -15,6 +15,10 @@ from litho.tools.base import Tool
 class LineTool(Tool):
     name = "line"
 
+    # LineItem draws a pen only — no fill_color use, even for the
+    # arrowhead (it's painted with the pen/stroke color, see items.py).
+    uses_fill = False
+
     def __init__(self, view, style, head_style: str = LineItem.HEAD_NONE) -> None:
         super().__init__(view, style)
         self.head_style = head_style

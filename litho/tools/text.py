@@ -17,6 +17,10 @@ from litho.tools.base import Tool
 class TextTool(Tool):
     name = "text"
 
+    # TextBoxItem uses stroke_color as the text color and size as the
+    # font's point size — no fill_color use.
+    uses_fill = False
+
     def activate(self) -> None:
         self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
 

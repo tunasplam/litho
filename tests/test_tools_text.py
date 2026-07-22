@@ -51,3 +51,12 @@ def test_created_item_uses_current_style(qtbot):
     assert item.defaultTextColor() == QColor("#ff0000")
     assert item.font().pointSize() == 22
     assert item.opacity() == 0.5
+
+
+def test_text_tool_does_not_use_fill(qtbot):
+    tool, scene = _tool(qtbot)
+
+    assert not tool.uses_fill
+    assert tool.uses_stroke
+    assert tool.uses_size
+    assert tool.uses_opacity

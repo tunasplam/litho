@@ -1,3 +1,6 @@
+import math
+
+import pytest
 from PySide6.QtCore import QLineF, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene, QGraphicsView
@@ -78,6 +81,102 @@ def test_line_item_bounding_rect_is_padded_for_arrowheads(qapp):
     arrow = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
 
     assert arrow.boundingRect().width() > plain.boundingRect().width()
+
+
+def test_arrowhead_grows_with_pen_width(qapp):
+    thin = LineItem(QLineF(0, 0, 200, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
+    thick = LineItem(QLineF(0, 0, 200, 0), QColor("#8fb8ff"), width=40, head_style=LineItem.HEAD_END)
+
+    assert thick._arrow_length > thin._arrow_length
+    assert thick.boundingRect().width() > thin.boundingRect().width()
+
+
+def test_arrowhead_length_has_a_floor_for_thin_lines(qapp):
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=1, head_style=LineItem.HEAD_END)
+
+    assert item._arrow_length == LineItem.ARROW_LENGTH_MIN
+
+
+def test_arrowhead_stays_wider_than_the_line_itself(qapp):
+    # The bug being fixed: at large enough widths a fixed-size arrowhead
+    # gets fully covered by the line's own thickness. The base of the
+    # head (2 * length * sin(spread)) must stay comfortably wider than
+    # the pen so the head is still visible on top of the line.
+    for width in (4, 40, 120):
+        item = LineItem(QLineF(0, 0, 300, 0), QColor("#8fb8ff"), width=width, head_style=LineItem.HEAD_END)
+        base_width = 2 * item._arrow_length * math.sin(math.radians(LineItem.ARROW_SPREAD_DEGREES))
+        assert base_width > width
+
+
+def test_plain_line_keeps_a_round_cap(qapp):
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_NONE)
+
+    assert item.pen().capStyle() == Qt.PenCapStyle.RoundCap
+
+
+def test_arrow_lines_use_a_flat_cap(qapp):
+    # Qt's "SquareCap" is a false friend: it still extends half the pen
+    # width past the endpoint. FlatCap is the one that actually stops
+    # exactly there, which is what keeps the shaft from overshooting the
+    # arrowhead base it's meant to terminate at.
+    end = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
+    both = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_BOTH)
+
+    assert end.pen().capStyle() == Qt.PenCapStyle.FlatCap
+    assert both.pen().capStyle() == Qt.PenCapStyle.FlatCap
+
+
+def test_shaft_line_is_unchanged_for_plain_lines(qapp):
+    line = QLineF(0, 0, 100, 0)
+    item = LineItem(line, QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_NONE)
+
+    assert item._shaft_line() == line
+
+
+def test_shaft_line_stops_just_past_the_arrowhead_base_for_head_end(qapp):
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
+
+    shaft = item._shaft_line()
+    expected_x = 100 - (item._arrow_base_distance - LineItem.ARROW_SHAFT_OVERLAP)
+
+    assert shaft.p1() == QPointF(0, 0)
+    assert shaft.p2().x() == pytest.approx(expected_x)
+    assert shaft.p2().y() == pytest.approx(0)
+    # The shaft must not reach all the way to the tip, but should
+    # deliberately overshoot the exact base line a little, into the head,
+    # so there's no anti-aliasing seam between the two shapes.
+    assert shaft.length() < item.line().length()
+    assert shaft.p2().x() > 100 - item._arrow_base_distance
+
+
+def test_shaft_line_stops_just_past_both_arrowhead_bases_for_head_both(qapp):
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_BOTH)
+
+    shaft = item._shaft_line()
+
+    base = item._arrow_base_distance - LineItem.ARROW_SHAFT_OVERLAP
+    assert shaft.p1().x() == pytest.approx(base)
+    assert shaft.p2().x() == pytest.approx(100 - base)
+
+
+def test_shaft_overlap_does_not_push_the_cut_point_negative(qapp):
+    # width=1 hits the ARROW_LENGTH_MIN floor, giving the smallest
+    # possible base distance — the overlap subtraction must still clamp
+    # at zero rather than sending the cut point past the tip itself.
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=1, head_style=LineItem.HEAD_END)
+
+    shaft = item._shaft_line()
+
+    assert 0 <= shaft.p2().x() <= 100
+
+
+def test_arrow_base_distance_is_shorter_than_arrow_length(qapp):
+    # The base (where the shaft should stop) sits in front of the two
+    # side corners (which are `_arrow_length` from the tip) — otherwise
+    # the shaft either overshoots the head or leaves a gap before it.
+    item = LineItem(QLineF(0, 0, 100, 0), QColor("#8fb8ff"), width=4, head_style=LineItem.HEAD_END)
+
+    assert 0 < item._arrow_base_distance < item._arrow_length
 
 
 def test_freehand_item_starts_path_at_first_point(qapp):

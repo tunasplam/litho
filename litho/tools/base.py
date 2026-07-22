@@ -41,6 +41,16 @@ class Tool:
     name = ""
     handles_own_events = True
 
+    # Which of the four toolbar style controls this tool's items actually
+    # read from `Style` when created — main_window.py greys out the rest
+    # so a control that would silently do nothing isn't left looking live.
+    # Default permissive (matches pre-audit behavior); tools narrow these
+    # down to whatever they actually use.
+    uses_stroke = True
+    uses_fill = True
+    uses_size = True
+    uses_opacity = True
+
     def __init__(self, view, style: Style) -> None:
         self.view = view
         self.style = style

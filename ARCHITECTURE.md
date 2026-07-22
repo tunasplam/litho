@@ -6,17 +6,54 @@ their color/size/opacity, and save/export back out (with format conversion
 between PNG/JPG/BMP/etc.).
 
 **Status snapshot** (update this line each session)
-`2026-07-22` — Freehand tool is live, on top of this morning's text box
-work. `FreehandItem` (canvas/items.py) subclasses `QGraphicsPathItem`;
-`tools/freehand.py`'s `FreehandTool` starts a path on press and calls
-`add_point()` on every subsequent move, same drag lifecycle as the
-Highlighter tool. You can open an image, draw a highlight, a
+`2026-07-22` — Three trial-usage fixes landed on the Arrow tools today.
+(1) Arrow/Double-arrow heads were a fixed 14px regardless of stroke size,
+so a large enough Size value made the line thickness swallow the
+arrowhead entirely — `LineItem`'s arrowhead length (canvas/items.py) now
+scales with pen width (`max(ARROW_LENGTH_MIN, width *
+ARROW_LENGTH_SCALE)`). (2) The shaft was drawn all the way to the tip and
+the arrowhead painted on top, which left a visible seam at the head's
+base (worse at partial opacity, where the overlap double-composites) —
+`LineItem.paint()` now custom-draws a shortened `_shaft_line()` that
+stops exactly at the arrowhead's base (`_arrow_base_distance = length *
+cos(spread)`, not `length` itself — that's the distance to the base's
+*corners*, not the base line) instead of delegating to
+`QGraphicsLineItem.paint()`. Losing that delegation meant losing Qt's
+free selection-highlight rendering too, so arrow lines now paint their
+own dashed selection rect. (3) Along the way, switched the shaft's pen
+cap from Round to `Qt.PenCapStyle.FlatCap` for any line with a head —
+first tried `SquareCap`, which turned out to be a false friend: despite
+the name it still extends half the pen width past the endpoint (same
+bounding box as RoundCap, just square-shaped), which reintroduced the
+seam at large widths; `FlatCap` is the one that actually stops exactly at
+the endpoint. Plain lines (no head) are untouched by any of this — same
+round cap, same `QGraphicsLineItem.paint()` delegation as before. (4)
+Even cut exactly at the base, two separately-painted shapes meeting at a
+precise seam still left a hairline anti-aliasing gap — added
+`ARROW_SHAFT_OVERLAP = 1.5`, subtracted from the cutoff distance so the
+shaft deliberately runs a little way into the head instead of stopping
+exactly at its edge. Confirmed clean (no gap, no seam) at the toolbar's
+default 100% opacity; at reduced opacity the overlap band very slightly
+double-composites, which is a real but much more minor trade-off than the
+gap it replaces — not fixed here, noted below.
+Also landed the Freehand tool this session — `FreehandItem` subclasses
+`QGraphicsPathItem`; `tools/freehand.py`'s `FreehandTool` starts a path
+on press and calls `add_point()` on every subsequent move, same drag
+lifecycle as the Highlighter tool. And audited which of the four style
+controls (Stroke/Fill/Size/Opacity) each tool actually reads — several
+were dead for a given tool with no indication in the UI — each `Tool`
+subclass now declares `uses_stroke`/`uses_fill`/`uses_size`/
+`uses_opacity` (tools/base.py), and
+`MainWindow._update_style_controls_for_tool` greys out whichever don't
+apply to the active tool. You can open an image, draw a highlight, a
 line/arrow/double-arrow, a freehand stroke, place and edit text, switch
 to Select, move any of them, and press Delete to remove it. Only Polygon
-remains present but disabled — not implemented yet. Next step: Polygon
-(click-to-place-vertex, double-click/Enter to close) is the last drawing
-tool, then `commands.py` (undo/redo) and `io.py` (save/export) are what's
-left before the app is functionally complete.
+remains present but disabled — not implemented yet. Two known
+inconsistencies from the style-control audit are still open: arrowheads
+are filled with the Stroke color despite being a filled shape, and
+Highlighter's Opacity is capped at a 0.4× multiplier while every other
+tool applies it directly. Next: Polygon, then `commands.py` (undo/redo)
+and `io.py` (save/export).
 
 ---
 
@@ -181,7 +218,7 @@ litho`, and committed on its own before moving to the next.
 | `main_window.py` + toolbars (no working tools yet) | Done | Text-only actions; both toolbar rows laid out and tested. Icons come later via `icons.py`. |
 | `canvas/view.py` + `canvas/scene.py` | Done | Zoom in/out/fit-to-window; a minimal `_on_open` in `main_window.py` loads an image via `QFileDialog` + `QPixmap` so the canvas is exercisable before `io.py` exists. |
 | `canvas/items.py` | Partial | `HighlightItem`, `LineItem`, `TextBoxItem`, `FreehandItem`. Polygon item follows the same base pattern (subclass a standard `QGraphicsItem` type, get selection styling for free). |
-| `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. |
+| `tools/base.py` (`Tool`, `Style`) | Done | `Style` is the shared stroke/fill/size/opacity state tools read at creation time; `main_window.py` owns and mutates it. `Tool` also declares `uses_stroke`/`uses_fill`/`uses_size`/`uses_opacity` (default all `True`), which each subclass narrows to what it actually reads — drives which toolbar controls `main_window.py` greys out per active tool. |
 | `tools/select.py` | Done | Delegates to Qt's native item selection/move — just sets `RubberBandDrag` on activate. Delete/Backspace removes the selection (`CanvasView._delete_selected_items`). |
 | `tools/polygon.py` | Not started | |
 | `tools/line.py` | Done | One `LineTool`/`LineItem` pair, instantiated three times (Line/Arrow/Double-arrow) with different `head_style` values. |
@@ -309,6 +346,83 @@ litho`, and committed on its own before moving to the next.
   rect/selection outline/hit-testing from it for free, same reasoning as
   every other item here subclassing a standard graphics item instead of
   a bare `QGraphicsItem`.
+- **2026-07-22** — Fixed (trial-usage bug report): `LineItem`'s arrowhead
+  was a constant `ARROW_LENGTH = 14` regardless of pen width, so at large
+  enough Size values the line itself was thicker than the arrowhead was
+  long, visually swallowing it. Replaced with `_arrow_length` derived
+  from pen width — `max(ARROW_LENGTH_MIN, width * ARROW_LENGTH_SCALE)` —
+  floored at the old constant so thin lines look the same as before.
+  `ARROW_SPREAD_DEGREES` stays a fixed angle rather than also scaling: the
+  arrowhead's base width is `2 * length * sin(spread)`, so it already
+  grows proportionally as `length` grows without the angle needing to
+  change too.
+- **2026-07-22** — Found and worked around a PySide6 6.11.1 binding bug
+  while testing the above: `QGraphicsPathItem(path)`'s constructor
+  overload silently drops the path (reads back as empty, and calling
+  `elementAt()` on the result segfaults the interpreter). `setPath()`
+  called after a no-arg construction works correctly. `FreehandItem`
+  already used this pattern by luck of how it was written; noting it here
+  since it'll bite again if a `Polygon`/other path-based item is
+  constructed the more obvious way.
+- **2026-07-22** — Chose "grey out the controls that don't apply" over
+  the alternatives (hide/show controls dynamically per tool, or relabel
+  per tool) for surfacing which of Stroke/Fill/Size/Opacity a given tool
+  actually uses. Keeps the toolbar layout static — no reflow as tools
+  change — while still making "this control does nothing right now"
+  visually obvious. Implemented as boolean flags on `Tool`
+  (`uses_stroke`/`uses_fill`/`uses_size`/`uses_opacity`, tools/base.py,
+  default all `True`) rather than inferring usage by inspecting each
+  item class, since the mapping is a handful of tools and an explicit
+  per-tool declaration is easier to audit and keep correct than reflection
+  over item constructors. The color swatches needed their own fix
+  alongside this: they set `background-color` via a plain stylesheet
+  rule, which Qt does not automatically mute on `setEnabled(False)` the
+  way it does for native-drawn widgets — added a `QPushButton:disabled`
+  stylesheet rule so a disabled swatch actually reads as grey instead of
+  staying at full color.
+- **2026-07-22** — Fixed (trial-usage bug report): arrow shafts drew all
+  the way to the tip, with the arrowhead triangle painted on top to
+  (mostly) cover the overrun. Two follow-on decisions:
+  - `LineItem.paint()` for a headed line no longer delegates to
+    `QGraphicsLineItem.paint()` at all; it draws the shortened
+    `_shaft_line()` and the arrowhead polygon(s) itself, then — since
+    that delegation was also where the free selection-highlight painting
+    came from — draws its own dashed selection rect when
+    `option.state & QStyle.StateFlag.State_Selected`. Plain (headless)
+    lines still take the `super().paint()` fast path, unchanged.
+  - The shaft has to stop at the arrowhead's *base edge*, not at
+    `_arrow_length` — that constant is the distance from the tip to the
+    base's two *corners*, which sit farther out than the base edge
+    itself once the spread angle is factored in. Added
+    `_arrow_base_distance = _arrow_length * cos(spread)` for the actual
+    cutoff point, computed via a small `_point_toward()` helper that
+    walks a given distance from one endpoint toward the other.
+  - First attempt used `Qt.PenCapStyle.SquareCap` for the shaft, which
+    looked identical to the bug it was meant to fix: `SquareCap` still
+    extends half the pen width past the endpoint (a square-shaped
+    version of `RoundCap`'s overrun, not a true flat cut).
+    `Qt.PenCapStyle.FlatCap` is the one that actually terminates exactly
+    at the given point — verified by rendering both to a `QImage` at a
+    thick pen width and comparing pixel output before settling on it.
+- **2026-07-22** — Follow-up fix (trial-usage report): even with the
+  shaft cut exactly at `_arrow_base_distance`, a hairline gap remained —
+  two shapes independently anti-aliased along a shared edge don't
+  necessarily agree pixel-for-pixel on that edge, a standard seam/
+  t-junction problem in vector rendering. Standard fix is the one applied
+  here: deliberately overlap the two shapes a little rather than trying
+  to align them exactly. Added `ARROW_SHAFT_OVERLAP = 1.5` (scene units),
+  subtracted from the cutoff distance in `_shaft_line()` and clamped at
+  zero so it can never push the cutoff past the tip on a very short/thin
+  arrow. Verified via a zoomed `QImage` render at the default 100%
+  opacity (no visible seam) and separately at 60% opacity, where the
+  overlap band does very slightly double-composite (reads marginally
+  brighter than the rest of the translucent arrow) — a real but far more
+  minor artifact than the gap it replaces, and only noticeable zoomed
+  in on a heavily transparent arrow. Left as-is rather than fixed, since
+  fixing it properly would mean compositing the shaft and head into an
+  offscreen buffer at full alpha and applying `Style.opacity` once to
+  the merged result, which is more machinery than this warrants unless
+  it turns out to matter in practice.
 
 ---
 

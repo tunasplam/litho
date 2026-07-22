@@ -121,22 +121,26 @@ class MainWindow(QMainWindow):
 
         self.stroke_swatch = _color_swatch(DEFAULT_STROKE_COLOR)
         self.fill_swatch = _color_swatch(DEFAULT_FILL_COLOR)
-        toolbar.addWidget(QLabel("Stroke"))
+        self.stroke_label = QLabel("Stroke")
+        self.fill_label = QLabel("Fill")
+        toolbar.addWidget(self.stroke_label)
         toolbar.addWidget(self.stroke_swatch)
-        toolbar.addWidget(QLabel("Fill"))
+        toolbar.addWidget(self.fill_label)
         toolbar.addWidget(self.fill_swatch)
 
         self.size_spin = QSpinBox()
         self.size_spin.setRange(1, 200)
         self.size_spin.setValue(14)
-        toolbar.addWidget(QLabel("Size"))
+        self.size_label = QLabel("Size")
+        toolbar.addWidget(self.size_label)
         toolbar.addWidget(self.size_spin)
 
         self.opacity_spin = QSpinBox()
         self.opacity_spin.setRange(0, 100)
         self.opacity_spin.setValue(100)
         self.opacity_spin.setSuffix("%")
-        toolbar.addWidget(QLabel("Opacity"))
+        self.opacity_label = QLabel("Opacity")
+        toolbar.addWidget(self.opacity_label)
         toolbar.addWidget(self.opacity_spin)
 
         self.addToolBar(toolbar)
@@ -205,11 +209,23 @@ class MainWindow(QMainWindow):
         }
         self.tool_group.triggered.connect(self._on_tool_changed)
         self.view.set_tool(self.tools[self.action_select])
+        self._update_style_controls_for_tool(self.tools[self.action_select])
 
     def _on_tool_changed(self, action: QAction) -> None:
         tool = self.tools.get(action)
         if tool is not None:
             self.view.set_tool(tool)
+            self._update_style_controls_for_tool(tool)
+
+    def _update_style_controls_for_tool(self, tool: Tool) -> None:
+        self.stroke_label.setEnabled(tool.uses_stroke)
+        self.stroke_swatch.setEnabled(tool.uses_stroke)
+        self.fill_label.setEnabled(tool.uses_fill)
+        self.fill_swatch.setEnabled(tool.uses_fill)
+        self.size_label.setEnabled(tool.uses_size)
+        self.size_spin.setEnabled(tool.uses_size)
+        self.opacity_label.setEnabled(tool.uses_opacity)
+        self.opacity_spin.setEnabled(tool.uses_opacity)
 
     def _connect_style_controls(self) -> None:
         self.stroke_swatch.clicked.connect(self._on_pick_stroke_color)
@@ -246,16 +262,20 @@ class MainWindow(QMainWindow):
 def _color_swatch(color: str) -> QPushButton:
     button = QPushButton()
     button.setFixedSize(20, 20)
-    button.setStyleSheet(
-        f"background-color: {color}; border: 1px solid rgba(255,255,255,0.3);"
-    )
+    _set_swatch_color(button, QColor(color))
     return button
 
 
 def _set_swatch_color(button: QPushButton, color: QColor) -> None:
+    # A plain `background-color` rule ignores Qt's disabled state, so a
+    # swatch for a control that doesn't apply to the active tool would
+    # otherwise stay just as vivid as an enabled one. The :disabled rule
+    # overrides it with a flat grey instead.
     button.setStyleSheet(
-        f"background-color: {color.name(QColor.NameFormat.HexArgb)}; "
-        "border: 1px solid rgba(255,255,255,0.3);"
+        f"QPushButton {{ background-color: {color.name(QColor.NameFormat.HexArgb)}; "
+        "border: 1px solid rgba(255,255,255,0.3); }"
+        "QPushButton:disabled { background-color: rgba(128,128,128,0.4); "
+        "border: 1px solid rgba(255,255,255,0.12); }"
     )
 
 

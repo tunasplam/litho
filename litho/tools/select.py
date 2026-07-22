@@ -16,6 +16,12 @@ class SelectTool(Tool):
     name = "select"
     handles_own_events = False
 
+    # Doesn't create items, so none of the style controls apply.
+    uses_stroke = False
+    uses_fill = False
+    uses_size = False
+    uses_opacity = False
+
     def activate(self) -> None:
         self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
 

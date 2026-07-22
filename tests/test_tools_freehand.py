@@ -57,3 +57,12 @@ def test_move_without_press_is_a_no_op(qtbot):
     tool.on_move(QPointF(5, 5))  # should not raise
 
     assert not [item for item in scene.items() if isinstance(item, FreehandItem)]
+
+
+def test_freehand_tool_does_not_use_fill(qtbot):
+    tool, scene = _tool(qtbot)
+
+    assert not tool.uses_fill
+    assert tool.uses_stroke
+    assert tool.uses_size
+    assert tool.uses_opacity

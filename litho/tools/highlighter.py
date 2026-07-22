@@ -16,6 +16,11 @@ BASE_OPACITY = 0.4
 class HighlighterTool(Tool):
     name = "highlighter"
 
+    # HighlightItem only reads fill_color and opacity (see items.py) — no
+    # pen is drawn, and its size doesn't depend on Style.size.
+    uses_stroke = False
+    uses_size = False
+
     def __init__(self, view, style) -> None:
         super().__init__(view, style)
         self._item: HighlightItem | None = None
